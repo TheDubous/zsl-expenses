@@ -1,69 +1,62 @@
-# ZSL Expenses PWA
+# ZSL Expenses · Lokální PWA (bez databázového serveru)
 
-Webová aplikácia / PWA pre iPhone, Android a desktop. **Toto je samostatný návrh v priečinku `web/`** – existujúci Expo projekt zostáva zachovaný v koreňovom priečinku repozitára.
+**Aktuální doporučená varianta.** PWA pro iPhone, Android i počítač. Účtenky, bankovní potvrzení, profily, jezdci a finanční záznamy ukládá **přímo do IndexedDB v tomto zařízení**. Nepotřebuje Supabase, login ani vlastní server. V kořeni repozitáře zůstává starší Expo verze.
 
-## Stav prototypu
-- Registrácia/prihlásenie cez Supabase Auth
-- Každý tréner má vlastný profil, akcie, jazdcov a doklady
-- Akcie: `Sústredenie` a `Preteky`; pri vzniku voľba jazdcov
-- Pohyby záloh: viac vkladov a vratiek, výpočet zostatku
-- Nahrávanie viacerých účteniek / fotografovanie na iPhone
-- Každý výdavok možno opraviť a označiť spôsob platby
-- Bankové potvrdenie sa pridáva **neskôr**, samostatne ku kartovému výdavku
-- Kontrola kompletnosti, kategórie, graf a export ZIP s potvrdeniami
-- Zabezpečené súkromné súbory cez Supabase Storage a RLS
-- PWA manifest a service worker pre inštalovanie na plochu
+## Co již funguje
+- Aplikace s ikonou na ploše telefonu (Safari → Sdílet → Přidat na plochu)
+- Profily více trenérů a databáze jezdců
+- Nové **Sústredenie** nebo **Preteky**: trenér, jezdci, termín, měna a počáteční záloha
+- Další zálohy / vklady a vrácení peněz, zůstatek a graf kategorií
+- Hromadné nahrání účtenek / focení; ruční doplnění obchodníka, sumy, data, kategorie a způsobu platby
+- **Pozdější** přidání jednoho bankovního potvrzení k jednotlivé platbě kartou, hotovost bez potvrzení
+- Nafta, benzín a AdBlue patří společně do kategorie Tankování
+- ZIP konkrétního vyúčtování: doklady + potvrzení + CSV + kontrola chybějících dokladů
+- **Kompletní záloha ZIP a obnova**: všechna soustředění, profily i původní přílohy
+- Bez internetového připojení fungují lokální operace **po prvním úspěšném načtení a uložení PWA pro offline použití**
 
-**Zatiaľ chýba:** OCR/AI rozpoznávanie, hromadné automatické priraďovanie potvrdení, úplný oficiálny Excel ZSL, viac mien v jednej akcii, offline synchronizácia a administrácia celej organizácie. Graf je podľa zadaných kategórií a súm. Testovanie je len prototypové, nie bezpečnostný audit.
+## Co ještě není hotové
+Automatické rozpoznání účtenek (AI OCR), hromadné automatické párování bankovních potvrzení podle částky, oficiální ZSL Excel, více měn během jedné akce a komplexní účetní výpočty. Offline chování ještě musí projít testem na skutečném iPhonu.
 
-## 1. Supabase
-
-1. Vytvor nový projekt na https://supabase.com/dashboard.
-2. Otvor **SQL Editor** a spusti celý súbor `../supabase/migrations/20261107_pwa_schema.sql`.
-3. V **Authentication → Providers** zapni e-mailové prihlasovanie. Pri verejnom nasadení je vhodné ponechať potvrdenie e-mailu.
-4. V **Project Settings → API** skopíruj Project URL a **publishable key** (nie secret, nie service_role).
-5. V Supabase **Authentication → URL Configuration** nastav produkčnú URL po prvom nasadení a povolené redirect adresy.
-
-## 2. Lokálny štart
-
+## Lokální vývoj
 ```bash
 cd web
 npm install
-cp .env.example .env.local
-```
-
-Do `.env.local` doplň:
-```ini
-VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_KEY
-```
-```bash
 npm test
 npm run build
 npm run dev
 ```
+Na počítači se otevře adresa, kterou Vite vypíše. Kód PWA nevyžaduje žádné .env soubory.
 
-## 3. Verejné HTTPS nasadenie cez Vercel
+## Jak zpřístupnit aplikaci přes HTTPS
+**Důležité:** GitHub repozitář obsahuje zdrojový kód, ale jeho adresa není URL hotové webové aplikace. PWA potřebuje jednorázově zveřejnit své statické soubory na HTTPS hostingu.
 
-1. Pripoj účet GitHub vo Vercel https://vercel.com/new a importuj `TheDubous/zsl-expenses`.
-2. V **Root Directory** nastav **web** (nie koreň repozitára).
-3. Framework Vite; `Build Command: npm run build`, `Output Directory: dist`.
-4. Nastav produkčné aj preview env premenné `VITE_SUPABASE_URL` a `VITE_SUPABASE_PUBLISHABLE_KEY`.
-5. Deploy. Pri testovaní vetvy `feature/pwa-supabase` použij preview deployment alebo zmeň production branch. Nezmiešaj ho s pôvodnou Expo aplikáciou.
-6. Po nasadení aktualizuj Supabase Auth URL / redirect nastavenia.
+### Jednoduchá možnost – Vercel
+1. Na https://vercel.com/new importuj repo `TheDubous/zsl-expenses`.
+2. Vyber větev `feature/pwa-supabase` (dokud není změna sloučena do `main`).
+3. **Root Directory** nastav na `web`.
+4. Framework `Vite`, Build Command `npm run build`, Output Directory `dist`.
+5. **Žádné environment variables** nejsou potřeba; deploy a otevři dodanou HTTPS adresu.
+6. Na iPhonu ji otevři v **Safari → Sdílet → Přidat na plochu → Otevřít jako webovou aplikaci**.
+7. **Začni pracovat přímo v ikoně na ploše.** Data vytvořená v Safari mohou mít odlišné úložiště než data PWA spuštěné z plochy.
 
-## 4. Inštalácia na iPhone
+### Volitelně – GitHub Pages
+Připravený workflow `.github/workflows/deploy-pwa-pages.yml` umožní statické nasazení do `https://TheDubous.github.io/zsl-expenses/`. Je třeba v GitHub Settings → Pages nastavit Source na GitHub Actions a spustit workflow. **Pozor:** GitHub Free podporuje Pages pouze ve veřejných repozitářích; soukromé repozitáře vyžadují oprávněný placený plán. Není nutné repozitář zveřejňovat; Vercel umí deploy i ze soukromého repozitáře.
 
-1. Otvor HTTPS adresu vo **Safari**.
-2. Daj **Zdieľať → Pridať na plochu** (prípadne **Otvoriť ako webovú aplikáciu**).
-3. Na ploche otvor ikonu ZSL Expenses, prihlás sa a sprav skúšobné vyúčtovanie.
+Hosting slouží jen k doručení webové aplikace. **Doklady se na tento hosting neposílají.**
 
-**Apple Developer účet ani App Store sa nevyžadujú.**
+## Zálohování a ochrana dat
+- Data v IndexedDB jsou v zařízení, nikoli v souborech viditelných v aplikaci Soubory. Smazání aplikace nebo jejích dat je může odstranit.
+- Po každém dni a zejména po dokončení akce zvol **Záloha → Stáhnout kompletní zálohu ZIP** a ulož ZIP mimo aplikaci, například na iCloud Drive.
+- Obnova ze ZIPu **nahradí všechny současné lokální záznamy** a znovu uloží všechny přílohy.
+- Záložní ZIP není šifrovaný, nepředávej ho veřejně a ukládej ho bezpečně.
+- Každé zařízení má vlastní databázi; trenéři mezi telefony nic automaticky nesdílejí.
+- Bez vlastních účtů ani přihlášení: každý, kdo má odemčené dané zařízení a přístup k PWA, může otevřít uložené doklady.
+- Pro první test používej fiktivní účetní doklady. S reálnými bankovními přílohami až po ověření na telefonu a zavedení zálohovacího postupu.
 
-## 5. Bezpečnosť a hranice prototypu
-- Každý užívateľ je oddelený RLS pravidlami. Súbory sú v **private** buckete, prefix cesty začína jeho auth UUID.
-- Klient používa iba publishable/anon kľúč; NIKDY do web klienta ani do GitHubu nevkladaj secret alebo service_role kľúč.
-- Prihlásenie uchováva reláciu v úložisku prehliadača; na zdieľanom telefóne sa odhlás.
-- Vygenerovaný ZIP nie je šifrovaný: posielaj ho iba schváleným príjemcom.
-- Service worker cache-uje iba webové assety, nie bankové doklady. Bez internetu sa dá načítať shell aplikácie, ale **dáta sa offline neupravujú**.
-- Pred ostrým používaním s bankovými dokladmi: prejsť RLS a Storage policies, zálohy, obnovu dát, dobu uchovávania, súhlasy a GDPR.
+## Technické soubory
+- `src/main.jsx`: mobilní rozhraní, soustředění/závody, doklady, grafy a zálohování
+- `src/localdb.js`: IndexedDB tabulky a soubory
+- `src/archive.js`: ZIP export, kompletní zálohování a obnova
+- `src/utils.mjs`: kategorie, částky a výpočet zbývající zálohy
+- `vite.config.js`: PWA, servisní pracovník a ikonky
+- `tests/`: testy výpočtů a lokální databáze
