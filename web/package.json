@@ -1,6 +1,6 @@
 {
-  "name": "zsl-expenses-pwa",
-  "version": "0.2.0",
+  "name": "zsl-expenses-local-pwa",
+  "version": "0.3.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -10,7 +10,6 @@
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
