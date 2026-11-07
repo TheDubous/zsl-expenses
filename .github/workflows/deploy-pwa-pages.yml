@@ -1,6 +1,11 @@
 name: Deploy local PWA to GitHub Pages (manual)
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-pwa-pages.yml'
   workflow_dispatch:
 
 permissions:
