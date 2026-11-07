@@ -1,0 +1,33 @@
+name: iOS JavaScript bundle check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run application tests
+        run: npm test
+      - name: Export iOS JavaScript bundle
+        run: npx expo export --platform ios --output-dir dist/ios
+      - name: Upload bundle diagnostics
+        if: failure()
+        run: |
+          echo "iOS JavaScript bundling failed. Check logs for Metro, dependency, or syntax problems."
