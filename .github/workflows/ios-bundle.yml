@@ -19,15 +19,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: package-lock.json
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Run application tests
         run: npm test
       - name: Export iOS JavaScript bundle
         run: npx expo export --platform ios --output-dir dist/ios
-      - name: Upload bundle diagnostics
-        if: failure()
-        run: |
-          echo "iOS JavaScript bundling failed. Check logs for Metro, dependency, or syntax problems."
