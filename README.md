@@ -1,43 +1,37 @@
 # ZSL Expenses
 
-Mobilná aplikácia (Expo / React Native) pre **Sústredenia** a **Preteky**.
+Aplikace pro vyúčtování snowboardových **Sústredení a Pretekov**.
 
-## Prvá verzia
-- Profil trénerov a jazdcov; vytvorenie akcie s termínom, menou a zálohou
-- Fotenie účteniek a hromadné nahrávanie z galérie
-- Doplnenie bankových potvrdení **neskôr** (samostatné PDF/obrázky)
-- Ručné spárovanie bankového potvrdenia s kartovou platbou
-- Kontrola chýbajúcich údajov a potvrdení; hotovosť potvrdenie nevyžaduje
-- Sumár čerpania zálohy a výdavkov po kategóriách; nafta aj AdBlue patria do Tankovania
-- ZIP s jednotlivými účtenkami a potvrdeniami, CSV a zoznamom neúplných dokladov
+## Doporučená verze: lokální PWA pro iPhone a Android
+Složka **[web/](./web/)** obsahuje webovou aplikaci, kterou lze z prohlížeče **přidat na plochu telefonu**.
 
-## Spustenie
-Nainštaluj Node.js 22+ a Expo Go vhodné pre používané Expo SDK.
+- **Bez externí databáze, účtu a Apple Developer Programu**.
+- Profily trenérů, jezdci, akce, zálohy, nákupy a účtenky jsou uloženy v telefonu pomocí **IndexedDB**.
+- Účtenky nahraješ nejdřív; bankovní potvrzení k platbám kartou přidáš později.
+- Přehled zůstatku zálohy, grafy kategorií a kontrola chybějících dokladů.
+- Export vyúčtování jako ZIP a **kompletní záloha / obnova lokálních dat**.
+- PWA lze po prvním načtení používat i bez internetu. Kód je staticky hostovaný přes HTTPS.
 
-```sh
+**[Návod k nasazení, iPhonu a zálohám](./web/README.md)**.
+
+```bash
+cd web
+npm install
+npm test
+npm run build
+npm run dev
+```
+
+### Důležité
+Aplikace **zatím není veřejně nasazená**. Otevření samotného repozitáře GitHubu nespustí instalovatelnou aplikaci; je potřeba statický HTTPS hosting (například Vercel nebo GitHub Pages, pokud to umožňuje plán GitHubu). Při nasazení hosting uchovává **pouze kód aplikace, nikoliv soukromé účtenky a bankovní dokumenty**.
+
+**Data jsou jen v konkrétním telefonu.** Vymazání dat Safari nebo odstranění aplikace je může smazat. Pravidelně vytvářej kompletní zálohu ZIP a ulož ji do Souborů/iCloud Drive. Při prvním testování používej fiktivní doklady. AI OCR a originální ZSL XLSX export zatím nejsou implementované.
+
+## Starší nativní prototyp: Expo
+Kořenové soubory `App.jsx`, `app.json`, `eas.json` a `package.json` nadále obsahují původní Expo/React Native prototyp. Nejsou nutné pro provoz lokální PWA.
+
+```bash
 npm install
 npm test
 npx expo start
 ```
-
-Pre Android APK možno použiť Expo EAS Build po prihlásení a konfigurácii Expo účtu:
-
-```sh
-npx eas-cli login
-npx eas-cli build:configure
-npx eas-cli build --platform android --profile preview
-```
-
-APK zatiaľ **nebolo zostavené ani testované na telefóne**.
-
-## Ešte neimplementované
-AI rozpoznávanie textu účteniek; automatické párovanie z obsahu bankových potvrdení; export do originálneho Excelu ZSL; cloudové účty a synchronizácia; viacmenové účtovanie, diéty a kniha jázd.
-
-## Bezpečnosť
-**Len testovací prototyp.** Metadáta sú v lokálnom AsyncStorage bez šifrovania, prílohy v súkromnom priečinku aplikácie. ZIP export nie je šifrovaný. Nepridávaj zatiaľ skutočné bankové doklady ani citlivé údaje. Do GitHubu nedávaj účtenky, osobné údaje ani tajné API kľúče.
-
-## Súbory
-- `App.jsx`: obrazovky aplikácie, doklady, priraďovanie a ZIP export
-- `src/domain.cjs`: výpočty a pravidlá úplnosti
-- `tests/domain.test.cjs`: automatické testy
-- `.github/workflows/ci.yml`: GitHub Actions testy
