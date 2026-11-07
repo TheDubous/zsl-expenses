@@ -1,0 +1,35 @@
+name: Build iOS preview (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-preview:
+    name: EAS iOS internal distribution build
+    runs-on: ubuntu-latest
+    environment: ios-build
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      CI: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Expo EAS CLI
+        run: npm install --global eas-cli
+      - name: Check Expo token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Please create a GitHub Actions secret named EXPO_TOKEN."
+            exit 1
+          fi
+      - name: Build iOS test app
+        run: eas build --platform ios --profile preview --non-interactive --no-wait
