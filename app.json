@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "ZSL Expenses",
+    "slug": "zsl-expenses",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0b1220",
+    "ios": {
+      "bundleIdentifier": "sk.zsl.expenses",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "sk.zsl.expenses"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Povolte přístup k fotografiím pro nahrávání účtenek.",
+          "cameraPermission": "Povolte fotoaparát pro focení účtenek."
+        }
+      ],
+      "expo-document-picker"
+    ]
+  }
+}
