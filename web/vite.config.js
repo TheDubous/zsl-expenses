@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icon.svg', 'apple-touch-icon.png', 'icon-192.png'],
       manifest: {
         id: '/',
         name: 'ZSL Expenses',
@@ -19,7 +19,10 @@ export default defineConfig({
         display: 'standalone',
         theme_color: '#0b1220',
         background_color: '#0b1220',
-        icons: [{ src: '/icon.svg', type: 'image/svg+xml', sizes: 'any', purpose: 'any' }]
+        icons: [
+          { src: '/icon-192.png', type: 'image/png', sizes: '192x192', purpose: 'any' },
+          { src: '/icon.svg', type: 'image/svg+xml', sizes: 'any', purpose: 'any' }
+        ]
       },
       workbox: {
         navigateFallback: '/index.html',
