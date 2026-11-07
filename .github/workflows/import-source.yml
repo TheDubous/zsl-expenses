@@ -1,0 +1,32 @@
+name: Import mobile app source
+on:
+  push:
+    paths:
+      - 'zsl-expenses-mobile.tar.xz'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Expand source into repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/zsl-source
+          tar -xJf zsl-expenses-mobile.tar.xz -C /tmp/zsl-source
+          cp -a /tmp/zsl-source/zsl-expenses-mobile/. .
+          rm zsl-expenses-mobile.tar.xz
+          rm .github/workflows/import-source.yml
+      - name: Commit imported source
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m 'Import ZSL Expenses Expo source v0.1'
+            git push
+          fi
