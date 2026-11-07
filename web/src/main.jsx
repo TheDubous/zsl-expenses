@@ -1,331 +1,279 @@
 import React,{useState,useEffect,useMemo,useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
-import JSZip from 'jszip';
-import {MountainSnow,Receipt,Users,Wallet,FolderArchive,Plus,Camera,CheckCircle2,AlertTriangle,Download,Upload,LogOut,Settings2,CalendarDays,ChevronRight,FileText,X,Lock,RefreshCw,ArrowLeft,Check,TrendingDown} from 'lucide-react';
-import {sb,configured,collect,saveFile,getFile,openFile,assertOk} from './data.js';
-import {CATEGORIES,currency,decimal,expenseStatus,summarize,safeFilename,csvCell} from './utils.mjs';
+import {MountainSnow,Receipt,Users,Wallet,FolderArchive,Plus,Camera,CheckCircle2,AlertTriangle,Download,Upload,Settings2,CalendarDays,ChevronRight,FileText,X,Lock,RefreshCw,Check,Smartphone,HardDrive,Trash2,ShieldCheck} from 'lucide-react';
+import {currency,decimal,CATEGORIES,expenseStatus,summarize} from './utils.mjs';
+import {loadAll,getOne,putOne,uid,addReceipt,setBankConfirmation,saveExpense,deleteExpense,requestPersistence,storageEstimate} from './localdb.js';
+import {exportBackup,importBackup,exportEvent,downloadBlob} from './archive.js';
 import './style.css';
 
+const initial={trainers:[],riders:[],events:[],funding:[],expenses:[]};
 const today=()=>new Date().toISOString().slice(0,10);
-const delay=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
+const showDate=(date)=>date?new Date(date+'T12:00:00').toLocaleDateString('cs-CZ'):'—';
 function Button({children,onClick,secondary=false,disabled=false,danger=false,small=false,type='button'}){
-  return <button type={type} disabled={disabled} onClick={onClick} className={'btn '+(secondary?'secondary ':'')+(danger?'danger ':'')+(small?'small':'')}>{children}</button>;
+  return <button type={type} disabled={disabled} onClick={onClick} className={'btn '+(secondary?'secondary ':'')+(danger?'danger ':'')+(small?'small':'')}>{children}</button>
 }
 function Input({label,...props}){return <label className="input-label"><span>{label}</span><input {...props}/></label>}
 function Select({label,children,...props}){return <label className="input-label"><span>{label}</span><select {...props}>{children}</select></label>}
 function Pill({children,ok=false,warn=false}){return <span className={'pill '+(ok?'ok':warn?'warn':'')}>{children}</span>}
 function Placeholder({title,text,icon:Icon=Receipt}){return <div className="empty"><Icon size={31}/><strong>{title}</strong><span>{text}</span></div>}
-function Status({item}){const state=expenseStatus(item);return <Pill ok={state==='Doklady kompletní'} warn={state!=='Doklady kompletní'}>{state==='Doklady kompletní'?<CheckCircle2 size={13}/>:<AlertTriangle size={13}/>} {state}</Pill>}
-function miniDate(d){if(!d)return '—';const date=new Date(d+'T12:00:00');return Number.isNaN(date.getTime())?d:date.toLocaleDateString('cs-CZ')}
+function Status({item}){const value=expenseStatus(item);return <Pill ok={value==='Doklady kompletní'} warn={value!=='Doklady kompletní'}>{value==='Doklady kompletní'?<CheckCircle2 size={13}/>:<AlertTriangle size={13}/>} {value}</Pill>}
+
 function App(){
-  const [session,setSession]=useState(null);
-  const [authReady,setAuthReady]=useState(false);
-  const [db,setDb]=useState({trainer_profiles:[],riders:[],events:[],event_riders:[],funding_movements:[],expenses:[]});
+  const [db,setDb]=useState(initial);
+  const [ready,setReady]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [notice,setNotice]=useState('');
   const [activeId,setActiveId]=useState(null);
   const [view,setView]=useState('overview');
-  const [busy,setBusy]=useState(false);
-  const [notice,setNotice]=useState('');
-  const [error,setError]=useState('');
-  const [showNew,setShowNew]=useState(false);
+  const [newEvent,setNewEvent]=useState(false);
   const [editing,setEditing]=useState(null);
+  const [editingTrainer,setEditingTrainer]=useState(null);
   const [online,setOnline]=useState(navigator.onLine);
-  const user=session?.user;
-  const profile=db.trainer_profiles.find(x=>x.id===user?.id);
-  const events=[...db.events].sort((a,b)=>b.created_at.localeCompare(a.created_at));
-  const active=events.find(x=>x.id===activeId)||events[0]||null;
-  const expenses=useMemo(()=>db.expenses.filter(x=>x.event_id===active?.id).sort((a,b)=>b.created_at.localeCompare(a.created_at)),[db.expenses,active?.id]);
-  const funding=useMemo(()=>db.funding_movements.filter(x=>x.event_id===active?.id),[db.funding_movements,active?.id]);
-  const metrics=useMemo(()=>summarize(expenses,funding),[expenses,funding]);
-  const selectedRiders=db.event_riders.filter(x=>x.event_id===active?.id).map(x=>db.riders.find(r=>r.id===x.rider_id)?.full_name).filter(Boolean);
+  const [storage,setStorage]=useState(null);
+  const [isPersistent,setIsPersistent]=useState(null);
 
-  useEffect(()=>{
-    const on=()=>setOnline(true),off=()=>setOnline(false);
-    window.addEventListener('online',on);window.addEventListener('offline',off);
-    return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off)};
-  },[]);
-  useEffect(()=>{
-    if(!sb){setAuthReady(true);return;}
-    sb.auth.getSession().then(({data,error})=>{if(error)setError(error.message);setSession(data?.session||null)}).finally(()=>setAuthReady(true));
-    const {data:{subscription}}=sb.auth.onAuthStateChange((_ev,s)=>setSession(s));
-    return()=>subscription.unsubscribe();
-  },[]);
-  const refresh=useCallback(async()=>{
-    if(!user)return;
-    try{const all=await collect();setDb(all);setError('');}
-    catch(e){setError('Načtení databáze: '+(e.message||e));}
-  },[user?.id]);
-  useEffect(()=>{if(user)refresh();else setDb({trainer_profiles:[],riders:[],events:[],event_riders:[],funding_movements:[],expenses:[]})},[user?.id,refresh]);
+  const refresh=useCallback(async()=>{const all=await loadAll();setDb(all);const e=await storageEstimate();setStorage(e)},[]);
+  useEffect(()=>{refresh().catch(e=>setError(e.message||String(e))).finally(()=>setReady(true))},[refresh]);
+  useEffect(()=>{const on=()=>setOnline(true),off=()=>setOnline(false);window.addEventListener('online',on);window.addEventListener('offline',off);return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off)}},[]);
+  useEffect(()=>{requestPersistence().then(v=>setIsPersistent(v)).catch(()=>{})},[]);
+
+  const events=useMemo(()=>[...db.events].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),[db.events]);
+  const active=events.find(e=>e.id===activeId)||events[0]||null;
+  const expenses=useMemo(()=>db.expenses.filter(e=>e.eventId===active?.id).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),[db.expenses,active?.id]);
+  const funding=useMemo(()=>db.funding.filter(x=>x.eventId===active?.id).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),[db.funding,active?.id]);
+  const summary=useMemo(()=>summarize(expenses,funding),[expenses,funding]);
+  const trainer=db.trainers.find(x=>x.id===active?.trainerId);
+  const participants=active?.riderIds?.map(id=>db.riders.find(r=>r.id===id)?.name).filter(Boolean)||[];
 
   async function run(action){
-    if(!online){setError('Pro ukládání dat potřebuješ internet. Údaje zůstávají v databázi, ne offline v telefonu.');return;}
     setBusy(true);setError('');setNotice('');
-    try{await action();await refresh();}
+    try{await action();await refresh()}
     catch(e){setError(e.message||String(e))}
     finally{setBusy(false)}
   }
-
-  async function saveProfile(e){
-    e.preventDefault();
-    const fd=new FormData(e.currentTarget);
-    const full_name=String(fd.get('full_name')||'').trim();
-    const club=String(fd.get('club')||'ZSL').trim();
+  async function addTrainer(e){
+    e.preventDefault();const form=e.currentTarget;
+    const f=new FormData(form);const name=String(f.get('name')||'').trim();
+    if(!name){setError('Vyplň jméno trenéra.');return}
     await run(async()=>{
-      assertOk(await sb.from('trainer_profiles').upsert({id:user.id,full_name,club}));
-      setNotice('Profil trenéra byl uložen.');
+      const row={id:editingTrainer?.id||uid(),name,club:String(f.get('club')||'ZSL').trim(),address:String(f.get('address')||'').trim(),contact:String(f.get('contact')||'').trim(),notes:String(f.get('notes')||'').trim(),createdAt:editingTrainer?.createdAt||new Date().toISOString()};
+      await putOne('trainers',row);setEditingTrainer(null);form.reset();setNotice('Profil trenéra uložený přímo v telefonu.');
     });
   }
   async function addRider(e){
-    e.preventDefault();const form=e.currentTarget;const fd=new FormData(form);
-    const full_name=String(fd.get('rider')||'').trim();if(!full_name)return;
-    await run(async()=>{assertOk(await sb.from('riders').insert({full_name}));form.reset();setNotice('Jezdec byl přidán.')});
+    e.preventDefault();const form=e.currentTarget;const f=new FormData(form),name=String(f.get('rider')||'').trim();
+    if(!name)return;
+    await run(async()=>{await putOne('riders',{id:uid(),name,createdAt:new Date().toISOString()});form.reset();setNotice('Jezdec přidán.')})
   }
-  async function addEvent(e){
-    e.preventDefault();const form=e.currentTarget;const fd=new FormData(form);
-    const name=String(fd.get('name')||'').trim();
-    const kind=String(fd.get('kind')||'Sústredenie');
-    const advance=decimal(fd.get('advance'));
-    if(!name||!Number.isFinite(advance)||advance<0) {setError('Zadej název a správnou částku zálohy.');return}
+  async function createEvent(e){
+    e.preventDefault();const f=new FormData(e.currentTarget),name=String(f.get('name')||'').trim(),advance=decimal(f.get('advance'));
+    if(!name||!db.trainers.some(t=>t.id===f.get('trainer'))||!Number.isFinite(advance)||advance<0){setError('Vyplň název, vyber trenéra a správně zadej zálohu.');return}
+    if(f.get('start')&&f.get('end')&&f.get('end')<f.get('start')){setError('Datum konce nemůže být před začátkem.');return}
     await run(async()=>{
-      const created=assertOk(await sb.from('events').insert({
-        name,kind,starts_on:fd.get('start')||null,ends_on:fd.get('end')||null,
-        currency:fd.get('currency')||'EUR'
-      }).select().single());
-      const riders=fd.getAll('riders');
-      if(riders.length)assertOk(await sb.from('event_riders').insert(riders.map(rider_id=>({event_id:created.id,rider_id}))));
-      if(advance>0)assertOk(await sb.from('funding_movements').insert({event_id:created.id,kind:'advance',amount:advance,occurred_on:today(),note:'Počáteční záloha'}));
-      setActiveId(created.id);setShowNew(false);setView('overview');setNotice('Nové vyúčtování bylo založeno.');
-    });
+      const idEvent=uid();
+      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
+      if(advance>0)await putOne('funding',{id:uid(),eventId:idEvent,kind:'advance',amount:advance,occurredOn:today(),note:'Počáteční záloha',createdAt:new Date().toISOString()});
+      setActiveId(idEvent);setNewEvent(false);setView('overview');setNotice('Akce byla vytvořena a uložena do telefonu.');
+    })
   }
-  async function addFunding(e){
-    e.preventDefault();const form=e.currentTarget;const fd=new FormData(form);
-    const amount=decimal(fd.get('amount'));
-    if(!active||!Number.isFinite(amount)||amount<=0){setError('Zadej kladnou částku.');return}
-    await run(async()=>{
-      assertOk(await sb.from('funding_movements').insert({
-        event_id:active.id,kind:fd.get('kind'),amount,occurred_on:fd.get('date')||today(),note:String(fd.get('note')||'')
-      }));
-      form.reset();setNotice('Pohyb peněz byl uložen.');
-    });
+  async function addMovement(e){
+    e.preventDefault();const form=e.currentTarget,fd=new FormData(form),val=decimal(fd.get('amount'));
+    if(!Number.isFinite(val)||val<=0){setError('Částka musí být kladné číslo.');return}
+    await run(async()=>{await putOne('funding',{id:uid(),eventId:active.id,kind:fd.get('kind'),amount:val,occurredOn:fd.get('date')||today(),note:String(fd.get('note')||''),createdAt:new Date().toISOString()});form.reset();setNotice('Pohyb zálohy uložen.')});
   }
   async function uploadReceipts(files){
     if(!active||!files?.length)return;
     await run(async()=>{
-      let success=0;
-      for(const file of Array.from(files)){
-        if(file.size>15*1024*1024)throw new Error(file.name+': maximální velikost je 15 MB.');
-        const row=assertOk(await sb.from('expenses').insert({
-          event_id:active.id,receipt_name:file.name,spent_on:today(),category:'other',
-          merchant:'',amount:0,payment_method:'unknown'
-        }).select().single());
-        const path=await saveFile(user.id,active.id,row.id,file,'receipt');
-        assertOk(await sb.from('expenses').update({receipt_path:path}).eq('id',row.id));
-        success++;
-      }
-      setNotice('Nahráno '+success+' účtenek. Teď můžeš doplnit částky a způsob platby.');
-      setView('documents');
+      let count=0;
+      for(const file of Array.from(files)){await addReceipt(active.id,file);count++}
+      setView('documents');setNotice('Uloženo '+count+' účtenek. Doplň částky a způsob platby.');
     });
   }
-  async function saveExpense(e){
-    e.preventDefault();const fd=new FormData(e.currentTarget);
-    const value=decimal(fd.get('amount'));
-    if(!Number.isFinite(value)||value<0){setError('Částka musí být platné číslo.');return}
+  async function updateExpense(e){
+    e.preventDefault();const f=new FormData(e.currentTarget),val=decimal(f.get('amount'));
+    if(!Number.isFinite(val)||val<0){setError('Neplatná částka výdaje.');return}
     await run(async()=>{
-      assertOk(await sb.from('expenses').update({
-        merchant:String(fd.get('merchant')||'').trim(),spent_on:fd.get('date')||null,
-        amount:value,category:fd.get('category'),payment_method:fd.get('method'),
-        note:String(fd.get('note')||'')
-      }).eq('id',editing.id));
-      setEditing(null);setNotice('Údaje dokladu byly uložené.');
-    });
+      await saveExpense({...editing,merchant:String(f.get('merchant')||'').trim(),spent_on:f.get('spentOn')||'',amount:val,category:f.get('category'),payment_method:f.get('method'),note:String(f.get('note')||'')});
+      setEditing(null);setNotice('Údaje účtenky uložené.');
+    })
   }
-  async function uploadConfirmation(expense,file){
-    if(!file||!expense||expense.payment_method!=='card')return;
+  async function attachBank(expense,file){
+    if(!file)return;
+    await run(async()=>{await setBankConfirmation(expense,file);setNotice('Potvrzení bylo přiloženo ke kartové platbě.')});
+  }
+  async function viewDocument(id){
     await run(async()=>{
-      const path=await saveFile(user.id,expense.event_id,expense.id,file,'bank');
-      assertOk(await sb.from('expenses').update({bank_path:path,bank_name:file.name}).eq('id',expense.id));
-      setNotice('Bankovní potvrzení bylo připojeno k platbě.');
+      const doc=await getOne('documents',id);
+      if(!doc?.blob)throw new Error('Doklad v telefonu nebyl nalezen.');
+      downloadBlob(doc.blob,doc.name||'doklad');
     });
   }
-  async function zipExport(){
-    if(!active)return;
-    await run(async()=>{
-      const zip=new JSZip(),dir=zip.folder('Doklady');
-      const csv=[['ID','Datum','Dodavatel','Castka','Mena','Kategorie','Platba','Stav']];
-      for(let i=0;i<expenses.length;i++){
-        const x=expenses[i];
-        const group=dir.folder(String(i+1).padStart(3,'0')+'_'+safeFilename(x.merchant||x.receipt_name));
-        csv.push([x.id,x.spent_on,x.merchant,x.amount,active.currency,CATEGORIES.find(c=>c.id===x.category)?.label,
-          x.payment_method,expenseStatus(x)]);
-        for(const f of [{path:x.receipt_path,name:x.receipt_name,prefix:'Uctenka'},{path:x.bank_path,name:x.bank_name,prefix:'Bankovni_potvrzeni'}]){
-          if(!f.path)continue;
-          try{const blob=await getFile(f.path);group.file(f.prefix+'_'+safeFilename(f.name),await blob.arrayBuffer())}
-          catch(err){group.file(f.prefix+'_NEDOSTUPNY.txt','Soubor se nepodařilo stáhnout. '+err.message)}
-        }
-      }
-      zip.file('Vydaje.csv','\uFEFF'+csv.map(row=>row.map(csvCell).join(';')).join('\r\n'));
-      zip.file('Zaloha_a_pohyby.csv','\uFEFF'+[['Typ','Datum','Castka','Mena','Poznamka'],...funding.map(f=>[f.kind,f.occurred_on,f.amount,active.currency,f.note])].map(row=>row.map(csvCell).join(';')).join('\r\n'));
-      zip.file('Kontrola.txt','Nekompletní doklady:\n'+(expenses.filter(x=>expenseStatus(x)!=='Doklady kompletní').map(x=>x.merchant+' | '+x.amount+' | '+expenseStatus(x)).join('\n')||'Žádné'));
-      const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});
-      const a=document.createElement('a'),url=URL.createObjectURL(blob);
-      a.href=url;a.download='ZSL_'+safeFilename(active.name)+'_doklady.zip';document.body.appendChild(a);a.click();a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),10000);
-      setNotice('ZIP archiv byl vytvořen. Obsahuje pouze doklady nahrané k této akci.');
-    });
+  async function removeExpense(row){
+    if(!window.confirm('Opravdu odstranit tento výdaj včetně účtenky a potvrzení?'))return;
+    await run(async()=>{await deleteExpense(row);setNotice('Výdaj a související přílohy byly odstraněny.')})
   }
+  async function doBackup(){
+    await run(async()=>{const result=await exportBackup();setNotice('Kompletní záloha vytvořena: '+result.events+' akcí, '+result.documents+' příloh. Ulož ZIP mimo aplikaci (např. Soubory / iCloud Drive).')});
+  }
+  async function doRestore(file){
+    if(!file)return;
+    if(!window.confirm('Obnovení NAHRADÍ všechna dosavadní data tohoto telefonu daty ze zálohy. Doporučujeme nejdřív vytvořit vlastní ZIP zálohu. Pokračovat?'))return;
+    await run(async()=>{const r=await importBackup(file);setActiveId(null);setView('overview');setNotice('Obnoveno '+r.events+' akcí, '+r.expenses+' výdajů a '+r.documents+' příloh.')})
+  }
+  async function doExport(){await run(async()=>{await exportEvent(active,expenses,funding);setNotice('Vyúčtování ZIP připravené ke stažení.')})}
 
-  if(!configured)return <div className="setup"><MountainSnow size={46}/><h1>ZSL Expenses</h1><p>Webová aplikace je připravená, ale zatím není připojena k databázi.</p><p>Pro spuštění je potřeba nastavit Supabase a proměnné <code>VITE_SUPABASE_URL</code> a <code>VITE_SUPABASE_PUBLISHABLE_KEY</code>.</p><p>Postup je v souboru <code>web/README.md</code> na GitHubu.</p></div>;
-  if(!authReady)return <div className="setup">Načítání ZSL Expenses…</div>;
-  if(!user)return <Auth/>;
-
-  function Overview(){
-    const groups=CATEGORIES.map(c=>({...c,value:expenses.filter(e=>e.category===c.id).reduce((s,x)=>s+Number(x.amount||0),0)}));
-    let angle=0;const parts=[];
-    for(const g of groups){if(metrics.spent<=0||g.value<=0)continue;const end=angle+g.value/metrics.spent*100;parts.push(g.color+' '+angle+'% '+end+'%');angle=end}
+  function Dashboard(){
+    const groups=CATEGORIES.map(c=>({...c,value:expenses.filter(x=>x.category===c.id).reduce((s,x)=>s+Number(x.amount),0)}));
+    let angle=0;
+    const parts=groups.filter(x=>x.value>0&&summary.spent>0).map(g=>{const end=angle+100*g.value/summary.spent;const part=g.color+' '+angle+'% '+end+'%';angle=end;return part});
     const dough=parts.length?'conic-gradient('+parts.join(',')+')':'conic-gradient(#374760 0% 100%)';
     return <div className="stack">
       <div className="stats">
-        <div className="metric"><span>Celkem přijato</span><strong>{currency(metrics.deposit,active.currency)}</strong></div>
-        <div className="metric"><span>Útrata na dokladech</span><strong>{currency(metrics.spent,active.currency)}</strong></div>
-        <div className={'metric main '+(metrics.remaining<0?'negative':'')}><span>Zbývá ze zálohy</span><strong>{currency(metrics.remaining,active.currency)}</strong></div>
+        <div className="metric"><span>Celkem přijaté zálohy</span><strong>{currency(summary.deposit,active.currency)}</strong></div>
+        <div className="metric"><span>Útrata na dokladech</span><strong>{currency(summary.spent,active.currency)}</strong></div>
+        <div className={'metric main '+(summary.remaining<0?'negative':'')}><span>Zbývá ze zálohy</span><strong>{currency(summary.remaining,active.currency)}</strong></div>
       </div>
       <div className="panel"><div className="heading"><h3>Čerpání zálohy</h3><Wallet size={20}/></div>
-        <div className="track"><div style={{width:(metrics.deposit>0?Math.min(100,Math.max(0,metrics.spent/(metrics.deposit-metrics.returned||1)*100)):0)+'%'}}/></div>
-        <div className="between muted smalltext"><span>Vráceno: {currency(metrics.returned,active.currency)}</span><span>{metrics.deposit>metrics.returned?Math.round(metrics.spent/(metrics.deposit-metrics.returned)*100):0} % využito</span></div>
+        <div className="track"><div style={{width:(summary.deposit>summary.returned?Math.min(100,Math.max(0,summary.spent/(summary.deposit-summary.returned)*100)):0)+'%'}}/></div>
+        <div className="between muted smalltext"><span>Vráceno: {currency(summary.returned,active.currency)}</span><span>{summary.deposit>summary.returned?Math.round(summary.spent/(summary.deposit-summary.returned)*100):0} % využito</span></div>
       </div>
-      <div className="panel"><div className="heading"><h3>Výdaje podle kategorií</h3><TrendingDown size={19}/></div>
-        <div className="chart-layout"><div className="donut" style={{background:dough}}><div className="donut-middle"><b>{currency(metrics.spent,active.currency)}</b><small>celkem</small></div></div>
+      <div className="panel"><div className="heading"><h3>Výdaje podle kategorií</h3><Receipt size={20}/></div>
+        <div className="chart-layout">
+          <div className="donut" style={{background:dough}}><div className="donut-middle"><b>{currency(summary.spent,active.currency)}</b><small>celkem</small></div></div>
           <div className="legend">{groups.map(g=><div key={g.id}><i style={{background:g.color}}/><span>{g.label}</span><strong>{currency(g.value,active.currency)}</strong></div>)}</div>
         </div>
       </div>
-      <div className="panel"><div className="heading"><h3>Kontrola dokumentů</h3><Receipt size={20}/></div>
-        <div className="counts"><div><strong>{metrics.count}</strong><span>Účtenek</span></div><div><strong>{metrics.incomplete}</strong><span>Ke kontrole</span></div><div><strong>{metrics.missingBank}</strong><span>Chybí potvrzení</span></div></div>
-        <Button secondary onClick={()=>setView('documents')}>Otevřít doklady <ChevronRight size={16}/></Button>
+      <div className="panel"><div className="heading"><h3>Stav dokumentů</h3><FileText size={20}/></div>
+        <div className="counts"><div><strong>{summary.count}</strong><span>Účtenek</span></div><div><strong>{summary.incomplete}</strong><span>Ke kontrole</span></div><div><strong>{summary.missingBank}</strong><span>Chybí potvrzení</span></div></div>
+        <Button secondary onClick={()=>setView('documents')}>Zobrazit doklady <ChevronRight size={16}/></Button>
       </div>
-      <div className="panel"><div className="heading"><h3>Finance akce</h3><Plus size={20}/></div>
-        <form onSubmit={addFunding} className="form-row">
-          <Select label="Pohyb" name="kind"><option value="advance">Další záloha / vklad</option><option value="return">Vrácení peněz</option></Select>
+      <div className="panel"><div className="heading"><h3>Zálohy a vrácené peníze</h3><Plus size={20}/></div>
+        <form onSubmit={addMovement} className="form-row">
+          <Select label="Typ pohybu" name="kind"><option value="advance">Nová záloha / vklad</option><option value="return">Vrácení peněz</option></Select>
           <Input label="Částka" name="amount" placeholder="0,00" inputMode="decimal" required/>
           <Input label="Datum" name="date" type="date" defaultValue={today()}/>
           <Input label="Poznámka" name="note" placeholder="Volitelná"/>
           <Button type="submit" disabled={busy}>Uložit pohyb</Button>
         </form>
-        {funding.length>0&&<div className="funding-list">{[...funding].reverse().map(f=><div key={f.id}><span>{f.kind==='advance'?'+ Záloha':'− Vráceno'} · {miniDate(f.occurred_on)} {f.note&&('· '+f.note)}</span><strong>{currency(f.amount,active.currency)}</strong></div>)}</div>}
+        {funding.length>0&&<div className="funding-list">{funding.map(x=><div key={x.id}><span>{x.kind==='advance'?'+ Záloha':'− Vráceno'} · {showDate(x.occurredOn)} {x.note&&'· '+x.note}</span><strong>{currency(x.amount,active.currency)}</strong></div>)}</div>}
       </div>
-    </div>
+      <div className="panel"><div className="heading"><h3>Účastníci akce</h3><Users size={20}/></div><p className="muted">{trainer?.name||'Trenér není vybraný'} · {participants.join(', ')||'Bez zvolených jezdců'}</p></div>
+    </div>;
   }
 
   function Documents(){
     return <div className="stack">
       <div className="panel"><div className="heading"><h3>1. Nahraj účtenky</h3><Camera size={20}/></div>
-        <p className="muted">Více fotografií najednou nebo přímo fotoaparátem. Údaje zatím doplníš ručně; automatické čtení připravíme později.</p>
+        <p className="muted">Nahraj více účtenek najednou, nebo je vyfoť. Fotografie se uloží jen do tohoto telefonu. Údaje zatím doplníš ručně.</p>
         <div className="upload-row">
-          <label className="btn filebtn"><Upload size={17}/> Vybrat více účtenek<input type="file" accept="image/*,application/pdf" multiple disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
-          <label className="btn secondary filebtn"><Camera size={17}/> Vyfotit účtenku<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
+          <label className="btn filebtn"><Upload size={17}/> Více účtenek<input type="file" accept="image/*,application/pdf" multiple disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
+          <label className="btn secondary filebtn"><Camera size={17}/> Vyfotit<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
         </div>
       </div>
-      <div className="panel"><div className="heading"><h3>2. Později doplň potvrzení</h3><FileText size={20}/></div>
-        <p className="muted">Každá platba kartou má vlastní bankovní potvrzení. Nahrává se přímo ke konkrétnímu výdaji níže. Hotovost potvrzení nevyžaduje.</p>
-        <div className="counts"><div><strong>{metrics.count}</strong><span>Celkem</span></div><div><strong>{metrics.missingBank}</strong><span>Bez výpisu</span></div><div><strong>{metrics.count-metrics.incomplete}</strong><span>Kompletní</span></div></div>
+      <div className="panel"><div className="heading"><h3>2. Později přidej bankovní potvrzení</h3><FileText size={20}/></div>
+        <p className="muted">Ke každé platbě kartou patří samostatné bankovní potvrzení. Přiložíš ho níže u správného výdaje. Hotovost ho nepotřebuje.</p>
+        <div className="counts"><div><strong>{summary.count}</strong><span>Výdajů</span></div><div><strong>{summary.missingBank}</strong><span>Chybí potvrzení</span></div><div><strong>{summary.count-summary.incomplete}</strong><span>Kompletních</span></div></div>
       </div>
-      <div className="heading"><h3>Seznam výdajů</h3><span className="muted">{expenses.length} záznamů</span></div>
-      {expenses.length===0&&<Placeholder title="Zatím žádné doklady" text="Nahraj fotografie a první výdaje se objeví tady."/>}
-      {expenses.map(x=><div className="expense" key={x.id}>
-        <div className="expense-top"><div><strong>{x.merchant||x.receipt_name||'Nový doklad'}</strong><small>{miniDate(x.spent_on)} · {CATEGORIES.find(c=>c.id===x.category)?.label||'Ostatní'}</small></div><b>{currency(x.amount,active.currency)}</b></div>
-        <div className="expense-bottom"><Status item={x}/>
-          <span className="muted smalltext">{x.payment_method==='card'?'Kartou':x.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
+      <div className="heading"><h3>Účtenky</h3><span className="muted">{expenses.length} dokladů</span></div>
+      {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
+      {expenses.map(e=><div className="expense" key={e.id}>
+        <div className="expense-top"><div><strong>{e.merchant||e.receipt_name||'Doklad'}</strong><small>{showDate(e.spent_on)} · {CATEGORIES.find(c=>c.id===e.category)?.label||'Ostatní'}</small></div><b>{currency(e.amount,active.currency)}</b></div>
+        <div className="expense-bottom"><Status item={e}/><span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
-          <Button small secondary onClick={()=>setEditing(x)}>Upravit</Button>
-          {x.receipt_path&&<Button small secondary onClick={()=>run(()=>openFile(x.receipt_path))}>Účtenka</Button>}
-          {x.bank_path?<Button small secondary onClick={()=>run(()=>openFile(x.bank_path))}>Bankovní potvrzení</Button>:x.payment_method==='card'&&
-            <label className="btn small filebtn"><Plus size={14}/> Doplnit potvrzení<input type="file" accept="application/pdf,image/*" disabled={busy} onChange={e=>{uploadConfirmation(x,e.target.files[0]);e.target.value=''}}/></label>}
+          <Button small secondary onClick={()=>setEditing(e)}>Upravit</Button>
+          {e.receipt_path&&<Button small secondary onClick={()=>viewDocument(e.receipt_path)}>Účtenka</Button>}
+          {e.bank_path?<Button small secondary onClick={()=>viewDocument(e.bank_path)}>Potvrzení</Button>:e.payment_method==='card'&&<label className="btn small filebtn"><Plus size={14}/> Připojit potvrzení<input type="file" accept="application/pdf,image/*" disabled={busy} onChange={ev=>{attachBank(e,ev.target.files[0]);ev.target.value=''}}/></label>}
+          <Button small secondary danger onClick={()=>removeExpense(e)}><Trash2 size={14}/></Button>
         </div>
       </div>)}
-      <Button disabled={busy||!expenses.length} onClick={zipExport}><FolderArchive size={17}/> Stáhnout ZIP dokladů</Button>
-      <p className="muted smalltext">Součástí ZIPu jsou účtenky, potvrzení, CSV a kontrolní seznam. Vyplnění oficiálního Excelu ZSL bude v další fázi.</p>
-    </div>
+      <Button onClick={doExport} disabled={busy||expenses.length===0}><FolderArchive size={17}/> ZIP tohoto vyúčtování</Button>
+      <p className="muted smalltext">Obsahuje přílohy jednotlivých výdajů, CSV a přehled chybějících potvrzení. Oficiální Excel ZSL doplníme v další verzi.</p>
+    </div>;
   }
 
   function People(){
     return <div className="stack">
-      <div className="panel"><div className="heading"><h3>Profil trenéra</h3><Users size={20}/></div>
-        <p className="muted">Každý trenér má vlastní účet, údaje a akce. Vyplníš jednou, potom se načítají automaticky.</p>
-        <form key={profile?.full_name||'empty-profile'} onSubmit={saveProfile} className="grid-form">
-          <Input label="Jméno a příjmení" name="full_name" defaultValue={profile?.full_name||''} required/>
-          <Input label="Klub" name="club" defaultValue={profile?.club||'ZSL'}/>
-          <Button type="submit" disabled={busy}>Uložit profil</Button>
+      <div className="panel"><div className="heading"><h3>Trenéři</h3><Users size={20}/></div>
+        <p className="muted">Profily si uložíš jednou. Při založení nového vyúčtování se vybere trenér a jeho údaje se použijí automaticky.</p>
+        <form onSubmit={addTrainer} key={editingTrainer?.id||'new-trainer'} className="grid-form">
+          <Input label="Jméno a příjmení" name="name" defaultValue={editingTrainer?.name||''} required/>
+          <div className="two-col"><Input label="Klub / organizace" name="club" defaultValue={editingTrainer?.club||'ZSL'}/><Input label="Kontakt (volitelné)" name="contact" defaultValue={editingTrainer?.contact||''}/></div>
+          <Input label="Adresa (pro budoucí Excel)" name="address" defaultValue={editingTrainer?.address||''}/>
+          <Input label="Další poznámky" name="notes" defaultValue={editingTrainer?.notes||''}/>
+          <Button disabled={busy} type="submit">{editingTrainer?'Uložit úpravy':'Přidat trenéra'}</Button>
+          {editingTrainer&&<Button secondary onClick={()=>setEditingTrainer(null)}>Zrušit úpravy</Button>}
         </form>
-        <p className="muted smalltext">Přihlášený účet: {user.email}</p>
+        {db.trainers.length>0&&<div className="rider-list">{db.trainers.map(t=><button key={t.id} className="trainer-chip" onClick={()=>{setEditingTrainer(t);setView('people')}}>{t.name} · {t.club} <Settings2 size={14}/></button>)}</div>}
       </div>
-      <div className="panel"><div className="heading"><h3>Databáze jezdců</h3><Users size={20}/></div>
+      <div className="panel"><div className="heading"><h3>Jezdci</h3><Users size={20}/></div>
         <form onSubmit={addRider} className="form-row"><Input name="rider" label="Jméno jezdce" placeholder="Jméno a příjmení" required/><Button type="submit" disabled={busy}><Plus size={16}/> Přidat</Button></form>
-        {db.riders.length===0?<p className="muted">Zatím nemáš uložené jezdce.</p>:<div className="rider-list">{db.riders.map(r=><div key={r.id}>{r.full_name}</div>)}</div>}
+        {db.riders.length===0?<p className="muted">Zatím nemáš uložené žádné jezdce.</p>:<div className="rider-list">{db.riders.map(r=><div key={r.id}>{r.name}</div>)}</div>}
       </div>
-      {active&&<div className="panel"><h3>Účastníci: {active.name}</h3><p className="muted">{selectedRiders.join(', ')||'Žádní vybraní jezdci'}</p></div>}
-    </div>
+    </div>;
   }
-
+  function Backup(){
+    const used=storage?.usage||0,quota=storage?.quota||0;
+    return <div className="stack">
+      <div className="panel"><div className="heading"><h3>Lokální ukládání</h3><HardDrive size={20}/></div>
+        <p className="muted">Všechna data i soubory jsou uložené v tomto iPhonu nebo počítači. Nemusíš se přihlašovat a po prvním načtení můžeš pracovat i offline.</p>
+        <p className="muted smalltext">Obsazeno úložiště: {used?(used/1024/1024).toFixed(1)+' MB':'neznámé'} {quota?' z dostupných přibližně '+(quota/1024/1024).toFixed(0)+' MB':''}. Trvalé úložiště {isPersistent===true?'povoleno':'nemusí být garantováno'}.</p>
+        <div className="alert error"><AlertTriangle size={18}/><span>Odstranění aplikace, vymazání dat Safari nebo porucha telefonu může zničit místní záznamy. Pravidelně vytvářej kompletní ZIP zálohu a ukládej ji do Souborů nebo iCloud Drive.</span></div>
+      </div>
+      <div className="panel"><div className="heading"><h3>Kompletní záloha</h3><FolderArchive size={20}/></div>
+        <p className="muted">Zahrnuje všechny trenéry, jezdce, soustředění i závody, finanční pohyby a originální fotografie a PDF doklady.</p>
+        <Button onClick={doBackup} disabled={busy}><Download size={17}/> Stáhnout kompletní zálohu ZIP</Button>
+      </div>
+      <div className="panel"><div className="heading"><h3>Obnova ze zálohy</h3><Upload size={20}/></div>
+        <p className="muted">Zálohu můžeš otevřít i na jiném telefonu. Obnovením přepíšeš všechna současná lokální data, proto si předem ulož vlastní zálohu.</p>
+        <label className="btn secondary filebtn"><Upload size={17}/> Vybrat zálohu ZIP<input type="file" accept=".zip,application/zip" disabled={busy} onChange={e=>{doRestore(e.target.files[0]);e.target.value=''}}/></label>
+      </div>
+      <div className="panel"><div className="heading"><h3>Ochrana dat</h3><ShieldCheck size={20}/></div>
+        <p className="muted">Doklady zůstanou v telefonu, ale lokální úložiště není v aplikaci zvlášť šifrované. ZIP záloha také není chráněná heslem. Neodesílej ji veřejně a při sdílení používej bezpečnou cestu.</p>
+      </div>
+    </div>;
+  }
+  if(!ready)return <div className="setup"><MountainSnow size={36}/><h1>ZSL Expenses</h1><p>Načítám místní data…</p></div>;
   return <div className="app">
-    <header className="topbar"><div className="brand"><span className="brand-icon"><MountainSnow size={25}/></span><div><strong>ZSL Expenses</strong><small>Správa vyúčtování</small></div></div>
-      <div className="top-actions">{!online&&<Pill warn>Offline</Pill>}<button aria-label="Obnovit" onClick={refresh}><RefreshCw size={19}/></button><button aria-label="Odhlásit" onClick={()=>sb.auth.signOut()}><LogOut size={19}/></button></div></header>
+    <header className="topbar"><div className="brand"><span className="brand-icon"><MountainSnow size={25}/></span><div><strong>ZSL Expenses</strong><small>Lokální aplikace · bez účtu</small></div></div><div className="top-actions">{!online&&<Pill warn>Offline</Pill>}<button aria-label="Zálohování" title="Zálohování" onClick={()=>setView('backup')}><HardDrive size={19}/></button><button aria-label="Obnovit přehled" title="Obnovit" onClick={()=>refresh().catch(e=>setError(e.message))}><RefreshCw size={19}/></button></div></header>
     <main className="main">
       {error&&<div className="alert error"><AlertTriangle size={18}/><span>{error}</span><button aria-label="Zavřít" onClick={()=>setError('')}><X size={17}/></button></div>}
       {notice&&<div className="alert success"><CheckCircle2 size={18}/><span>{notice}</span><button aria-label="Zavřít" onClick={()=>setNotice('')}><X size={17}/></button></div>}
-      <div className="welcome"><div><p className="eyebrow">Moje vyúčtování</p><h1>{profile?.full_name?'Ahoj, '+profile.full_name.split(' ')[0]:'Vítej v ZSL Expenses'}</h1></div><Button onClick={()=>setShowNew(true)}><Plus size={17}/> Nová akce</Button></div>
-      {events.length===0?<div className="panel start"><MountainSnow size={40}/><h2>Začni novou akcí</h2><p>Vytvoř soustředění nebo závody, přidej účastníky a začni evidovat výdaje.</p><Button onClick={()=>setShowNew(true)}><Plus size={17}/> Založit vyúčtování</Button></div>:<>
-        <div className="event-select"><Select label="Aktuální akce" value={active?.id||''} onChange={e=>{setActiveId(e.target.value);setView('overview')}}>
-          {events.map(ev=><option key={ev.id} value={ev.id}>{ev.kind==='Preteky'?'🏁':'🏔️'} {ev.name}</option>)}
-        </Select><span>{active?.kind} · {miniDate(active?.starts_on)}{active?.ends_on&&' – '+miniDate(active.ends_on)}</span></div>
-        <div className="tab-nav">{[['overview',Wallet,'Přehled'],['documents',Receipt,'Doklady'],['people',Users,'Lidé']].map(([id,Icon,label])=><button key={id} className={view===id?'active':''} onClick={()=>setView(id)}><Icon size={18}/>{label}</button>)}</div>
-        {view==='overview'?<Overview/>:view==='documents'?<Documents/>:<People/>}
-      </>}
-      {events.length===0&&<People/>}
-      <footer>Testovací verze · údaje jsou oddělené podle přihlášeného trenéra · pro ostré účetnictví ještě ověřit</footer>
+      <div className="welcome"><div><p className="eyebrow">Moje vyúčtování</p><h1>ZSL Expenses</h1></div><Button onClick={()=>db.trainers.length?setNewEvent(true):setView('people')}><Plus size={17}/> Nová akce</Button></div>
+      {events.length===0?<div className="panel start"><MountainSnow size={40}/><h2>Připrav první akci</h2><p>Nejdřív přidej trenéra, pak vytvoř soustředění nebo závody a začni ukládat účtenky.</p><Button onClick={()=>db.trainers.length?setNewEvent(true):setView('people')}>{db.trainers.length?'Vytvořit akci':'Přidat trenéra'}</Button></div>:<div className="event-select">
+        <Select label="Aktuální akce" value={active?.id||''} onChange={e=>{setActiveId(e.target.value);setView('overview')}}>{events.map(ev=><option key={ev.id} value={ev.id}>{ev.kind==='Preteky'?'🏁':'🏔️'} {ev.name} – {db.trainers.find(t=>t.id===ev.trainerId)?.name||'Trenér'}</option>)}</Select>
+        <span>{active?.kind} · {showDate(active?.startsOn)}{active?.endsOn&&' – '+showDate(active.endsOn)}</span></div>}
+      <div className="tab-nav">{[[ 'overview',Wallet,'Přehled'],['documents',Receipt,'Doklady'],['people',Users,'Lidé'],['backup',HardDrive,'Záloha']].map(([name,Icon,label])=><button key={name} className={view===name?'active':''} onClick={()=>setView(name)}><Icon size={18}/>{label}</button>)}</div>
+      {view==='people'?<People/>:view==='backup'?<Backup/>:active?(view==='overview'?<Dashboard/>:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
+      <footer>Lokální prototyp · ukládej pravidelné ZIP zálohy · bez cloudové synchronizace</footer>
     </main>
-    {showNew&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setShowNew(false)}}>
-      <div className="modal"><div className="heading"><h2>Nové vyúčtování</h2><button onClick={()=>setShowNew(false)}><X size={20}/></button></div>
-        <form onSubmit={addEvent} className="grid-form">
-          <Select label="Typ akce" name="kind"><option value="Sústredenie">Sústredenie – soustředění</option><option value="Preteky">Preteky – závody</option></Select>
+    {newEvent&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setNewEvent(false)}}>
+      <div className="modal"><div className="heading"><h2>Nové vyúčtování</h2><button aria-label="Zavřít" onClick={()=>setNewEvent(false)}><X size={20}/></button></div>
+        <form onSubmit={createEvent} className="grid-form">
+          <Select label="Typ" name="kind"><option value="Sústredenie">Sústredenie (soustředění)</option><option value="Preteky">Preteky (závody)</option></Select>
           <Input label="Název" name="name" placeholder="Pitztal SBX" required/>
-          <div className="two-col"><Input label="Od" name="start" type="date"/><Input label="Do" name="end" type="date"/></div>
-          <div className="two-col"><Input label="Počáteční záloha" name="advance" inputMode="decimal" defaultValue="0" required/><Select label="Měna" name="currency"><option>EUR</option><option>CZK</option><option>CHF</option></Select></div>
-          <div className="input-label"><span>Trenér</span><div className="muted">{profile?.full_name||user.email} (aktuální účet)</div></div>
-          <div className="input-label"><span>Vyber jezdce</span><div className="checks">{db.riders.length===0&&<span className="muted">Jezdce můžeš přidat v sekci Lidé.</span>}{db.riders.map(r=><label key={r.id}><input type="checkbox" name="riders" value={r.id}/>{r.full_name}</label>)}</div></div>
-          <Button type="submit" disabled={busy}>{busy?'Ukládám…':'Vytvořit akci'}</Button>
+          <Select label="Trenér" name="trainer">{db.trainers.map(t=><option value={t.id} key={t.id}>{t.name}{t.club?' – '+t.club:''}</option>)}</Select>
+          <div className="two-col"><Input label="Začátek" name="start" type="date"/><Input label="Konec" name="end" type="date"/></div>
+          <div className="two-col"><Input label="Počáteční záloha" name="advance" defaultValue="0" inputMode="decimal" required/><Select label="Měna" name="currency"><option>EUR</option><option>CZK</option><option>CHF</option></Select></div>
+          <div className="input-label"><span>Jezdci</span><div className="checks">{db.riders.length===0&&<p className="muted">Jezdce přidej v záložce Lidé.</p>}{db.riders.map(r=><label key={r.id}><input type="checkbox" name="riders" value={r.id}/>{r.name}</label>)}</div></div>
+          <Button type="submit" disabled={busy}>Vytvořit soustředění / závody</Button>
         </form>
       </div>
     </div>}
     {editing&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEditing(null)}}>
-      <div className="modal"><div className="heading"><h2>Upravit doklad</h2><button onClick={()=>setEditing(null)}><X size={20}/></button></div>
-        <form key={editing.id} onSubmit={saveExpense} className="grid-form">
-          <Input label="Dodavatel" name="merchant" defaultValue={editing.merchant} placeholder="Např. Slovnaft"/>
-          <div className="two-col"><Input label="Datum" name="date" type="date" defaultValue={editing.spent_on||today()}/><Input label="Částka" name="amount" defaultValue={String(editing.amount||'')} inputMode="decimal" required/></div>
+      <div className="modal"><div className="heading"><h2>Upravit doklad</h2><button aria-label="Zavřít" onClick={()=>setEditing(null)}><X size={20}/></button></div>
+        <form key={editing.id} onSubmit={updateExpense} className="grid-form">
+          <Input label="Obchodník / dodavatel" name="merchant" defaultValue={editing.merchant} placeholder="Např. Slovnaft"/>
+          <div className="two-col"><Input label="Datum" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label="Částka" name="amount" defaultValue={String(editing.amount||'')} inputMode="decimal" required/></div>
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
-          <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Není vybráno</option><option value="card">Kartou – vyžaduje potvrzení</option><option value="cash">Hotově</option></Select>
+          <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
-          <div className="muted smalltext">Bankovní potvrzení přiřadíš po uložení v seznamu dokladů.</div>
-          <Button disabled={busy} type="submit"><Check size={17}/> Uložit změny</Button>
+          <p className="muted smalltext">Bankovní potvrzení můžeš přiložit později v seznamu dokladů. Změna způsobu platby z karty odstraní původní bankovní přílohu.</p>
+          <Button type="submit" disabled={busy}><Check size={17}/> Uložit změny</Button>
         </form>
       </div>
     </div>}
-    {busy&&<div className="busy"><RefreshCw className="spin" size={18}/> Zpracovávám…</div>}
-  </div>
-}
-function Auth(){
-  const [register,setRegister]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
-  async function submit(e){
-    e.preventDefault();setBusy(true);setError('');setMessage('');
-    const fd=new FormData(e.currentTarget),email=String(fd.get('email')||''),password=String(fd.get('password')||'');
-    const result=register?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});
-    if(result.error)setError(result.error.message);
-    else if(register)setMessage('Účet vytvořen. Pokud máš zapnuté potvrzení e-mailu, ověř ho v doručené poště.');
-    setBusy(false);
-  }
-  return <div className="auth-page"><div className="auth-card"><span className="brand-icon big"><MountainSnow size={35}/></span><h1>ZSL Expenses</h1><p>Vyúčtování soustředění a závodů</p>
-    {error&&<div className="alert error">{error}</div>}{message&&<div className="alert success">{message}</div>}
-    <form onSubmit={submit} className="grid-form"><Input label="E-mail" name="email" type="email" autoComplete="email" required/><Input label="Heslo" name="password" type="password" minLength="6" autoComplete={register?'new-password':'current-password'} required/>
-      <Button type="submit" disabled={busy}>{register?'Vytvořit účet':'Přihlásit se'}</Button></form>
-    <button className="text-link" onClick={()=>{setRegister(!register);setError('');setMessage('')}}>{register?'Mám účet – přihlásit se':'Nemám účet – registrovat se'}</button>
-    <p className="privacy"><Lock size={14}/> Data a doklady jednotlivých trenérů jsou oddělené.</p>
-  </div></div>
+    {busy&&<div className="busy"><RefreshCw className="spin" size={18}/> Ukládám…</div>}
+  </div>;
 }
 createRoot(document.getElementById('root')).render(<App/>);
