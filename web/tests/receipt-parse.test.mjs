@@ -17,3 +17,14 @@ test('invalid date and empty OCR',()=>{
  assert.equal(parseReceiptText('Datum 31.02.2026').spent_on,null);
  assert.equal(parseReceiptText('').amount,null);
 });
+
+test('vendor with OCR letter separation and one typo is recovered',()=>{
+ const a=parseReceiptText('03.11.2026\nPITZTALER GLETSCHER BAHN\nLIFT PASS\nGesamtbetrag 615,00 EUR');
+ assert.equal(a.merchant,'Pitztaler Gletscherbahn');
+ const b=parseReceiptText('GUTM4NN\nDiesel\nGESAMTBETRAG 127,78 EUR');
+ assert.equal(b.merchant,'Gutmann');
+});
+test('unrecognized supplier yields alternatives instead of pretending certainty',()=>{
+ const x=parseReceiptText('KASSENBON\nZAHLUNG\nBERGHAUS SONNE GmbH\n03.11.2026\nSUMME 28,90 EUR');
+ assert.ok(x.merchantCandidates.some(z=>/berghaus sonne/i.test(z.name)));
+});
