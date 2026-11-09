@@ -1,9 +1,12 @@
 import React,{useState,useEffect,useMemo,useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
-import {MountainSnow,Receipt,Users,Wallet,FolderArchive,Plus,Camera,CheckCircle2,AlertTriangle,Download,Upload,Settings2,CalendarDays,ChevronRight,FileText,X,Lock,RefreshCw,Check,Smartphone,HardDrive,Trash2,ShieldCheck} from 'lucide-react';
+import {MountainSnow,Receipt,Users,Wallet,FolderArchive,Plus,Camera,CheckCircle2,AlertTriangle,Download,Upload,Settings2,CalendarDays,ChevronRight,FileText,X,Lock,RefreshCw,Check,Smartphone,HardDrive,Trash2,ShieldCheck,FileSpreadsheet,ScanLine,UserX,UserCheck} from 'lucide-react';
 import {currency,decimal,CATEGORIES,expenseStatus,summarize} from './utils.mjs';
 import {loadAll,getOne,putOne,uid,addReceipt,setBankConfirmation,saveExpense,deleteExpense,requestPersistence,storageEstimate} from './localdb.js';
 import {exportBackup,importBackup,exportEvent,downloadBlob} from './archive.js';
+import SettlementPreview from './SettlementPreview.jsx';
+import ReceiptViewer from './ReceiptViewer.jsx';
+import {createOCRSession,canRecognize} from './ocr.js';
 import './style.css';
 
 const initial={trainers:[],riders:[],events:[],funding:[],expenses:[]};
@@ -29,6 +32,9 @@ function App(){
   const [newEvent,setNewEvent]=useState(false);
   const [editing,setEditing]=useState(null);
   const [editingTrainer,setEditingTrainer]=useState(null);
+  const [editingEvent,setEditingEvent]=useState(false);
+  const [viewingDoc,setViewingDoc]=useState(null);
+  const [ocrProgress,setOcrProgress]=useState('');
   const [online,setOnline]=useState(navigator.onLine);
   const [storage,setStorage]=useState(null);
   const [isPersistent,setIsPersistent]=useState(null);
@@ -55,10 +61,20 @@ function App(){
   async function addTrainer(e){
     e.preventDefault();const form=e.currentTarget;
     const f=new FormData(form);const name=String(f.get('name')||'').trim();
+    const iban=String(f.get('iban')||'').trim().replace(/\s+/g,'').toUpperCase();
     if(!name){setError('Vyplň jméno trenéra.');return}
+    if(iban&&!/^[A-Z]{2}[0-9A-Z]{13,32}$/.test(iban)){setError('IBAN má mít mezinárodní formát (15 až 34 znaků, začíná kódem země).');return}
     await run(async()=>{
-      const row={id:editingTrainer?.id||uid(),name,club:String(f.get('club')||'ZSL').trim(),address:String(f.get('address')||'').trim(),contact:String(f.get('contact')||'').trim(),notes:String(f.get('notes')||'').trim(),createdAt:editingTrainer?.createdAt||new Date().toISOString()};
-      await putOne('trainers',row);setEditingTrainer(null);form.reset();setNotice('Profil trenéra uložený přímo v telefonu.');
+      const row={
+        id:editingTrainer?.id||uid(),name,title:String(f.get('title')||'').trim(),
+        role:String(f.get('role')||'').trim(),department:String(f.get('department')||'').trim(),
+        club:String(f.get('club')||'ZSL').trim(),address:String(f.get('address')||'').trim(),
+        contact:String(f.get('contact')||'').trim(),email:String(f.get('email')||'').trim(),
+        iban,bic:String(f.get('bic')||'').trim().toUpperCase(),bankName:String(f.get('bankName')||'').trim(),
+        notes:String(f.get('notes')||'').trim(),createdAt:editingTrainer?.createdAt||new Date().toISOString()
+      };
+      await putOne('trainers',row);setEditingTrainer(null);form.reset();
+      setNotice('Profil trenéra včetně bankovních údajů byl uložen v tomto telefonu.');
     });
   }
   async function addRider(e){
@@ -72,29 +88,116 @@ function App(){
     if(f.get('start')&&f.get('end')&&f.get('end')<f.get('start')){setError('Datum konce nemůže být před začátkem.');return}
     await run(async()=>{
       const idEvent=uid();
-      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
+      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),advanceNumber:String(f.get('advanceNumber')||''),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
       if(advance>0)await putOne('funding',{id:uid(),eventId:idEvent,kind:'advance',amount:advance,occurredOn:today(),note:'Počáteční záloha',createdAt:new Date().toISOString()});
       setActiveId(idEvent);setNewEvent(false);setView('overview');setNotice('Akce byla vytvořena a uložena do telefonu.');
     })
+  }
+  async function saveRoster(e){
+    e.preventDefault();if(!active)return;
+    const f=new FormData(e.currentTarget),next=f.getAll('riders');
+    const old=active.riderIds||[];
+    const delta=[
+      ...next.filter(id=>!old.includes(id)).map(riderId=>({riderId,action:'joined',at:new Date().toISOString()})),
+      ...old.filter(id=>!next.includes(id)).map(riderId=>({riderId,action:'left',at:new Date().toISOString()}))
+    ];
+    await run(async()=>{
+      await putOne('events',{...active,riderIds:next,rosterChanges:[...(active.rosterChanges||[]),...delta]});
+      setNotice('Aktuální soupiska aktualizována. Historie změn zůstává zachovaná.');
+    })
+  }
+  async function toggleRiderActive(rider){
+    await run(async()=>{
+      await putOne('riders',{...rider,inactive:!rider.inactive});
+      setNotice(rider.inactive?'Jezdec je opět aktivní.':'Jezdec byl archivován – jeho stará vyúčtování zůstávají zachovaná.');
+    });
+  }
+  async function saveEventChanges(e){
+    e.preventDefault();if(!active)return;
+    const f=new FormData(e.currentTarget);
+    if(f.get('start')&&f.get('end')&&f.get('end')<f.get('start')){setError('Datum konce je před začátkem.');return}
+    await run(async()=>{
+      await putOne('events',{
+        ...active,name:String(f.get('name')||'').trim()||active.name,kind:f.get('kind')||active.kind,
+        trainerId:f.get('trainer')||active.trainerId,startsOn:f.get('start')||'',endsOn:f.get('end')||'',
+        startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),
+        endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),
+        location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
+        advanceNumber:String(f.get('advanceNumber')||'')
+      });
+      setEditingEvent(false);setNotice('Údaje cesty byly aktualizované.');
+    });
   }
   async function addMovement(e){
     e.preventDefault();const form=e.currentTarget,fd=new FormData(form),val=decimal(fd.get('amount'));
     if(!Number.isFinite(val)||val<=0){setError('Částka musí být kladné číslo.');return}
     await run(async()=>{await putOne('funding',{id:uid(),eventId:active.id,kind:fd.get('kind'),amount:val,occurredOn:fd.get('date')||today(),note:String(fd.get('note')||''),createdAt:new Date().toISOString()});form.reset();setNotice('Pohyb zálohy uložen.')});
   }
-  async function uploadReceipts(files){
-    if(!active||!files?.length)return;
+  async function uploadReceipts(inputFiles){
+    if(!active||!inputFiles?.length)return;
+    // Copy FileList before resetting the HTML input.
+    const files=Array.from(inputFiles);
     await run(async()=>{
-      let count=0;
-      for(const file of Array.from(files)){await addReceipt(active.id,file);count++}
-      setView('documents');setNotice('Uloženo '+count+' účtenek. Doplň částky a způsob platby.');
+      const uploaded=[];
+      for(const file of files)uploaded.push({file,expense:await addReceipt(active.id,file)});
+      await refresh(); // Receipt images are safe even if OCR cannot run.
+      let scanned=0,failed=0;
+      const photos=uploaded.filter(x=>canRecognize(x.file));
+      if(photos.length){
+        let scanner=null;
+        try{
+          setOcrProgress('Připravuji rozpoznávání…');
+          scanner=await createOCRSession(setOcrProgress);
+          for(let i=0;i<photos.length;i++){
+            const {file,expense}=photos[i];
+            try{
+              setOcrProgress('Čtu účtenku '+(i+1)+'/'+photos.length+'…');
+              const found=await scanner.scan(file);
+              const candidate={
+                ...expense,amount:found.amount||0,merchant:found.merchant||'',
+                spent_on:found.spent_on||expense.spent_on,
+                category:found.category||expense.category,
+                payment_method:found.payment_method||'unknown',
+                ocr:{confidence:found.confidence,amountCandidates:found.amountCandidates,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+              };
+              await saveExpense(candidate);scanned++;
+            }catch(ocrError){failed++;}
+          }
+        }catch(ocrError){failed+=photos.length-scanned;setError('OCR se nepodařilo spustit: '+(ocrError.message||ocrError)+'. Účtenky jsou uložené; částku lze doplnit ručně.')}
+        finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('');}
+      }
+      setView('documents');
+      setNotice('Uloženo '+uploaded.length+' účtenek. Automaticky předvyplněno '+scanned+'.'+(failed?' U '+failed+' fotografií je potřeba ruční kontrola.':'')+' Navržené údaje otevři přes Upravit a potvrď.');
+    });
+  }
+  async function rescanExpense(expense){
+    await run(async()=>{
+      const doc=await getOne('documents',expense.receipt_path);
+      if(!doc?.blob)throw new Error('Fotografii se nepodařilo načíst.');
+      if(!canRecognize(doc.blob))throw new Error('OCR podporuje fotografie, nikoli PDF. Částku z PDF zatím zadej ručně.');
+      let scanner=null;
+      try{
+        setOcrProgress('Čtu existující účtenku…');
+        scanner=await createOCRSession(setOcrProgress);
+        const found=await scanner.scan(doc.blob);
+        await saveExpense({
+          ...expense,
+          amount:Number(expense.amount)>0?expense.amount:(found.amount||0),
+          merchant:expense.merchant||found.merchant||'',
+          spent_on:found.spent_on||expense.spent_on,
+          category:expense.category==='other'?found.category:expense.category,
+          payment_method:expense.payment_method==='unknown'?found.payment_method:expense.payment_method,
+          ocr:{confidence:found.confidence,amountCandidates:found.amountCandidates,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+        });
+        setNotice('OCR dokončeno. Zkontroluj navržené údaje v detailu výdaje.');
+      }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
     });
   }
   async function updateExpense(e){
     e.preventDefault();const f=new FormData(e.currentTarget),val=decimal(f.get('amount'));
     if(!Number.isFinite(val)||val<0){setError('Neplatná částka výdaje.');return}
     await run(async()=>{
-      await saveExpense({...editing,merchant:String(f.get('merchant')||'').trim(),spent_on:f.get('spentOn')||'',amount:val,category:f.get('category'),payment_method:f.get('method'),note:String(f.get('note')||'')});
+      await saveExpense({...editing,merchant:String(f.get('merchant')||'').trim(),spent_on:f.get('spentOn')||'',amount:val,category:f.get('category'),payment_method:f.get('method'),note:String(f.get('note')||''),ocr:editing.ocr?{...editing.ocr,reviewed:true}:undefined});
       setEditing(null);setNotice('Údaje účtenky uložené.');
     })
   }
@@ -102,13 +205,7 @@ function App(){
     if(!file)return;
     await run(async()=>{await setBankConfirmation(expense,file);setNotice('Potvrzení bylo přiloženo ke kartové platbě.')});
   }
-  async function viewDocument(id){
-    await run(async()=>{
-      const doc=await getOne('documents',id);
-      if(!doc?.blob)throw new Error('Doklad v telefonu nebyl nalezen.');
-      downloadBlob(doc.blob,doc.name||'doklad');
-    });
-  }
+  function viewDocument(id){setViewingDoc(id)}
   async function removeExpense(row){
     if(!window.confirm('Opravdu odstranit tento výdaj včetně účtenky a potvrzení?'))return;
     await run(async()=>{await deleteExpense(row);setNotice('Výdaj a související přílohy byly odstraněny.')})
