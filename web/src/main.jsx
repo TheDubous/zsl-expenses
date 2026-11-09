@@ -9,7 +9,8 @@ import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
-import {downloadZslPdf} from './zsl-pdf.js';
+import {storeOriginalTemplate,getTemplateInfo,downloadFilledOriginal} from './zsl-xlsx.js';
+import {downloadAttachmentsPdf} from './attachments-pdf.js';
 import './style.css';
 
 const initial={trainers:[],riders:[],events:[],funding:[],expenses:[]};
@@ -40,11 +41,17 @@ function App(){
   const [viewingDoc,setViewingDoc]=useState(null);
   const [ocrProgress,setOcrProgress]=useState('');
   const [ocrMode,setOcrMode]=useState('precise');
+  const [templateInfo,setTemplateInfo]=useState(null);
+  const [exportAudit,setExportAudit]=useState(null);
+  const [attachmentAudit,setAttachmentAudit]=useState(null);
   const [online,setOnline]=useState(navigator.onLine);
   const [storage,setStorage]=useState(null);
   const [isPersistent,setIsPersistent]=useState(null);
 
-  const refresh=useCallback(async()=>{const all=await loadAll();setDb(all);const e=await storageEstimate();setStorage(e)},[]);
+  const refresh=useCallback(async()=>{const all=await loadAll();setDb(all);
+    const e=await storageEstimate();setStorage(e);
+    setTemplateInfo(await getTemplateInfo());
+  },[]);
   useEffect(()=>{refresh().catch(e=>setError(e.message||String(e))).finally(()=>setReady(true))},[refresh]);
   useEffect(()=>{const on=()=>setOnline(true),off=()=>setOnline(false);window.addEventListener('online',on);window.addEventListener('offline',off);return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off)}},[]);
   useEffect(()=>{requestPersistence().then(v=>setIsPersistent(v)).catch(()=>{})},[]);
@@ -230,11 +237,28 @@ function App(){
     await run(async()=>{const r=await importBackup(file);setActiveId(null);setView('overview');setNotice('Obnoveno '+r.events+' akcí, '+r.expenses+' výdajů a '+r.documents+' příloh.')})
   }
   async function doExport(){await run(async()=>{await exportEvent(active,expenses,funding);setNotice('Vyúčtování ZIP připravené ke stažení.')})}
-  async function doDownloadPdf(){
+  async function importXlsxTemplate(file){
+    if(!file)return;
+    await run(async()=>{
+      const info=await storeOriginalTemplate(file);
+      setExportAudit(null);
+      setNotice('Originální ZSL XLSX byl uložen pouze do tohoto telefonu: '+info.filename+'. Původní data ani vzorce nepřepisujeme.');
+    });
+  }
+  async function downloadOriginalWorkbook(){
     if(!active||busy)return;
     await run(async()=>{
-      const result=await downloadZslPdf({event:active,trainer,riders:reportRiders,expenses,funding});
-      setNotice('Kontrolní PDF celého výkazu bylo vytvořeno: '+result.filename+'. Obsahuje i nevyplněné části ZSL.');
+      const result=await downloadFilledOriginal({event:active,trainer,riders:reportRiders,expenses,funding});
+      setExportAudit(result);
+      setNotice('Stažena kopie původního XLSX: '+result.changes.length+' buněk doplněno, '+result.conflicts.length+' kolizí, '+result.skipped.length+' nezařazených/neúplných účtenek.');
+    });
+  }
+  async function downloadProofsPdf(){
+    if(!active||busy)return;
+    await run(async()=>{
+      const result=await downloadAttachmentsPdf({event:active,expenses});
+      setAttachmentAudit(result);
+      setNotice('Staženo samostatné PDF s účtenkami a bankovními potvrzeními: '+result.pages+' stran, '+result.warnings.length+' upozornění.');
     });
   }
 
@@ -254,7 +278,7 @@ function App(){
         <div className="between muted smalltext"><span>Vráceno: {currency(summary.returned,active.currency)}</span><span>{summary.deposit>summary.returned?Math.round(summary.spent/(summary.deposit-summary.returned)*100):0} % využito</span></div>
       </div>
       <div className="panel zsl-overview">
-        <div className="heading"><h3><FileSpreadsheet size={19}/> Zúčtovanie oprávnených výdavkov</h3></div>
+        <div className="heading"><h3><FileSpreadsheet size={19}/> Zúčtovanie oprávnených výdavkov – orientačný súhrn</h3></div>
         <p className="muted smalltext">Položky přesně podle listu <strong>s.1 - pokyn</strong>. Zadané doklady jsou zatím orientační; stravné, další náhrady a konečné schválení nejsou vypočítané.</p>
         <div className="zsl-accounting-rows">
           {zslReport?.settlement.map(row=><div key={row.id} className={'zsl-accounting-row '+(row.amount==null?'not-computed':'')}>
@@ -264,10 +288,11 @@ function App(){
         {zslReport?.sections.find(x=>x.id==='unassigned')?.expenses.length>0&&
           <p className="zsl-warning">Tankovanie: {zslReport.sections.find(x=>x.id==='unassigned').expenses.length} dokladov potrebuje určiť typ vozidla v s.3 - výdavky.</p>}
         <div className="report-actions">
-          <Button disabled={busy} onClick={doDownloadPdf}><Download size={17}/> Stáhnout celý výkaz PDF</Button>
-          <Button secondary onClick={()=>setView('preview')}><FileSpreadsheet size={17}/> Náhled listů ZSL</Button>
+          <Button disabled={busy||!templateInfo} onClick={downloadOriginalWorkbook}><FileSpreadsheet size={17}/> Stáhnout vyplněný původní XLSX</Button>
+          <Button disabled={busy||expenses.length===0} secondary onClick={downloadProofsPdf}><Download size={17}/> Stáhnout přílohy PDF</Button>
+          <Button secondary onClick={()=>setView('preview')}>Nastavení originální šablony</Button>
         </div>
-        <p className="muted smalltext">PDF bude obsahovat údaje trenéra včetně IBAN. Nešifrovaný PDF soubor ukládej a sdílej bezpečně; originální účtenky zůstávají zvlášť v ZIPu.</p>
+        <p className="muted smalltext">{templateInfo?'Originál uložený v telefonu: '+templateInfo.name:'Nejdříve v záložce Náhled vyber původní ZSL Excel.'} PDF obsahuje účtenky a bankovní potvrzení zvlášť od XLSX. Soubory nejsou šifrované.</p>
       </div>
       <div className="panel"><div className="heading"><h3>Výdaje podle kategorií</h3><Receipt size={20}/></div>
         <div className="chart-layout">
@@ -328,7 +353,7 @@ function App(){
         </div>
       </div>)}
       <Button onClick={doExport} disabled={busy||expenses.length===0}><FolderArchive size={17}/> ZIP tohoto vyúčtování</Button>
-      <p className="muted smalltext">Obsahuje přílohy jednotlivých výdajů, CSV a přehled chybějících potvrzení. V záložce <strong>Náhled</strong> uvidíš, jak budou data uspořádána ve formuláři ZSL. Přímý export do originálního Excelu zatím není hotový.</p>
+      <p className="muted smalltext">ZIP zůstává jako záloha souborů. Hlavní výstupy najdeš v záložce <strong>Náhled</strong>: originální vyplněný XLSX a samostatné PDF s doklady.</p>
     </div>;
   }
 
@@ -409,7 +434,12 @@ function App(){
         <Select label="Aktuální akce" value={active?.id||''} onChange={e=>{setActiveId(e.target.value);setView('overview')}}>{events.map(ev=><option key={ev.id} value={ev.id}>{ev.kind==='Preteky'?'🏁':'🏔️'} {ev.name} – {db.trainers.find(t=>t.id===ev.trainerId)?.name||'Trenér'}</option>)}</Select>
         <span>{active?.kind} · {showDate(active?.startsOn)}{active?.endsOn&&' – '+showDate(active.endsOn)}</span></div>}
       <div className="tab-nav">{[[ 'overview',Wallet,'Přehled'],['documents',Receipt,'Doklady'],['preview',FileSpreadsheet,'Náhled'],['people',Users,'Lidé'],['backup',HardDrive,'Záloha']].map(([name,Icon,label])=><button key={name} className={view===name?'active':''} onClick={()=>setView(name)}><Icon size={18}/>{label}</button>)}</div>
-      {view==='people'?<People/>:view==='backup'?<Backup/>:active?(view==='overview'?<Dashboard/>:view==='preview'?<SettlementPreview event={active} trainer={trainer} riders={db.riders.filter(r=>(active.riderIds||[]).includes(r.id))} expenses={expenses} funding={funding} onEditEvent={()=>setEditingEvent(true)} onDownloadPdf={doDownloadPdf} busy={busy}/>:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
+      {view==='people'?<People/>:view==='backup'?<Backup/>:active?(view==='overview'?<Dashboard/>:view==='preview'?<SettlementPreview
+        event={active} trainer={trainer} riders={reportRiders} expenses={expenses} funding={funding}
+        onEditEvent={()=>setEditingEvent(true)} onImportTemplate={importXlsxTemplate}
+        onDownloadXlsx={downloadOriginalWorkbook} onDownloadAttachments={downloadProofsPdf}
+        templateInfo={templateInfo} exportAudit={exportAudit} attachmentAudit={attachmentAudit} busy={busy}
+      />:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
       <footer>Lokální prototyp · ukládej pravidelné ZIP zálohy · bez cloudové synchronizace</footer>
     </main>
     {newEvent&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setNewEvent(false)}}>
@@ -459,9 +489,11 @@ function App(){
           <div className="two-col"><Input label="Datum" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label="Částka" name="amount" defaultValue={String(editing.amount||'')} inputMode="decimal" required/></div>
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
-          <Select label="Zaradenie výdavku podľa s.3 - výdavky" name="zslSection" defaultValue={editing.zsl_section||'auto'}>
+          <Select label="Zaradenie výdavku do originálu ZSL (nutné pro export)" name="zslSection" defaultValue={editing.zsl_section||'auto'}>
             <option value="auto">Automaticky podľa kategórie (palivo zostane nezařadené)</option>
             {ZSL_EXPENSE_SECTIONS.filter(section=>section.id!=='unassigned').map(section=><option key={section.id} value={section.id}>{section.label}</option>)}
+            <option value="foreign_meal">s.4 - stravné zahr. – pokladničný doklad zo strav. zariadenia</option>
+            <option value="domestic_meal">s.4 - stravné tuzem. – zatím vyžaduje ručné doplnenie</option>
             <option value="unassigned">NEZARADENÉ - vyžaduje kontrolu</option>
           </Select>
           <Input label="Továrenská značka vozidla, EČV vozidla (pokud se týká paliva)" name="vehicleDetails" defaultValue={editing.vehicleDetails||''} placeholder="Např. Renault Trafic / AA-619RJ"/>
