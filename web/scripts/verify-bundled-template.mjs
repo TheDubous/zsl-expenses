@@ -16,7 +16,7 @@ const foreignDoc=new DOMParser().parseFromString(foreignXML,'application/xml');
 for(const row of Array.from(foreignDoc.getElementsByTagName('row')).filter(r=>Number(r.getAttribute('r'))>=69&&Number(r.getAttribute('r'))<=79)){
   const cells=Array.from(row.getElementsByTagName('c')).flatMap(c=>{
     const ref=c.getAttribute('r'),v=c.getElementsByTagName('v')[0]?.textContent,formula=c.getElementsByTagName('f')[0]?.textContent;
-    if(!/^(B|C|F|I|J|K|L)\\d+$/.test(ref))return [];
+    if(!/^(B|C|F|I|J|K|L)[0-9]+$/.test(ref))return [];
     const text=c.getAttribute('t')==='s'?sharedTexts[Number(v)]:v||'';
     return text||formula?[ref+'='+String(formula?'formula:'+formula:text).slice(0,56)]:[];
   });
