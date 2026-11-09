@@ -176,7 +176,7 @@ function App(){
                 spent_on:found.spent_on||expense.spent_on,
                 category:found.category||expense.category,
                 payment_method:found.payment_method||'unknown',
-                ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+                ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
               };
               await saveExpense(candidate);scanned++;
             }catch(ocrError){failed++;}
@@ -205,7 +205,7 @@ function App(){
           spent_on:found.spent_on||expense.spent_on,
           category:expense.category==='other'?found.category:expense.category,
           payment_method:expense.payment_method==='unknown'?found.payment_method:expense.payment_method,
-          ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+          ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
         });
         setNotice('OCR dokončeno. Zkontroluj navržené údaje v detailu výdaje.');
       }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
@@ -506,7 +506,7 @@ function App(){
           </Select>
           <Input label="Továrenská značka vozidla, EČV vozidla (pokud se týká paliva)" name="vehicleDetails" defaultValue={editing.vehicleDetails||''} placeholder="Např. Renault Trafic / AA-619RJ"/>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
-          {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>
+          {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>{editing.ocr.receiptCropDetected&&<p className="muted smalltext">Úzká účtenka byla před čtením automaticky izolována a zvětšena.</p>}
             <p>OCR je návrh, ne ověření dokladu. Prohlédni originál, zkontroluj částku i dodavatele a teprve pak ulož.</p>
             {(editing.ocr.merchantCandidates||[]).length>0&&<div className="ocr-candidates">
               <span>Možní dodavatelé:</span>
