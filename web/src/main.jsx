@@ -291,22 +291,46 @@ function App(){
 
   function People(){
     return <div className="stack">
-      <div className="panel"><div className="heading"><h3>Trenéři</h3><Users size={20}/></div>
-        <p className="muted">Profily si uložíš jednou. Při založení nového vyúčtování se vybere trenér a jeho údaje se použijí automaticky.</p>
+      <div className="panel"><div className="heading"><h3>Profily trenérů – podle formuláře ZSL</h3><Users size={20}/></div>
+        <p className="muted">Vyplň jednou údaje z listu <strong>s.1 – pokyn</strong>. Zůstanou v telefonu a použijí se do náhledu každého vyúčtování.</p>
         <form onSubmit={addTrainer} key={editingTrainer?.id||'new-trainer'} className="grid-form">
-          <Input label="Jméno a příjmení" name="name" defaultValue={editingTrainer?.name||''} required/>
-          <div className="two-col"><Input label="Klub / organizace" name="club" defaultValue={editingTrainer?.club||'ZSL'}/><Input label="Kontakt (volitelné)" name="contact" defaultValue={editingTrainer?.contact||''}/></div>
-          <Input label="Adresa (pro budoucí Excel)" name="address" defaultValue={editingTrainer?.address||''}/>
-          <Input label="Další poznámky" name="notes" defaultValue={editingTrainer?.notes||''}/>
-          <Button disabled={busy} type="submit">{editingTrainer?'Uložit úpravy':'Přidat trenéra'}</Button>
+          <div className="two-col"><Input label="Jméno a příjmení *" name="name" defaultValue={editingTrainer?.name||''} required/><Input label="Titul" name="title" defaultValue={editingTrainer?.title||''} placeholder="Mgr., Bc., Ing."/></div>
+          <div className="two-col"><Input label="Funkcia / pozice" name="role" defaultValue={editingTrainer?.role||'Tréner'}/><Input label="Oddelenie ZSL" name="department" defaultValue={editingTrainer?.department||'Sekcia moderných disciplín'}/></div>
+          <Input label="Trvalé bydlisko – adresa" name="address" defaultValue={editingTrainer?.address||''}/>
+          <div className="two-col"><Input label="Telefónny kontakt" name="contact" type="tel" defaultValue={editingTrainer?.contact||''}/><Input label="E-mail (volitelné)" name="email" type="email" defaultValue={editingTrainer?.email||''}/></div>
+          <Input label="IBAN vyúčtovateľa" name="iban" defaultValue={editingTrainer?.iban||''} placeholder="SK..."/>
+          <div className="two-col"><Input label="BIC / SWIFT (navíc)" name="bic" defaultValue={editingTrainer?.bic||''}/><Input label="Název banky (navíc)" name="bankName" defaultValue={editingTrainer?.bankName||''}/></div>
+          <Input label="Klub / organizace" name="club" defaultValue={editingTrainer?.club||'ZSL'}/>
+          <Input label="Poznámky" name="notes" defaultValue={editingTrainer?.notes||''}/>
+          <Button disabled={busy} type="submit">{editingTrainer?'Uložit upravený profil':'Přidat trenéra'}</Button>
           {editingTrainer&&<Button secondary onClick={()=>setEditingTrainer(null)}>Zrušit úpravy</Button>}
         </form>
-        {db.trainers.length>0&&<div className="rider-list">{db.trainers.map(t=><button key={t.id} className="trainer-chip" onClick={()=>{setEditingTrainer(t);setView('people')}}>{t.name} · {t.club} <Settings2 size={14}/></button>)}</div>}
+        {db.trainers.length>0&&<div className="rider-list">{db.trainers.map(t=><button key={t.id} className="trainer-chip" onClick={()=>setEditingTrainer(t)}>{t.name} · {t.club} <Settings2 size={14}/></button>)}</div>}
+        <p className="muted smalltext">IBAN zůstává uložený pouze v tomto zařízení a objeví se v kompletní záloze ZIP. Zálohu předávej bezpečně.</p>
       </div>
-      <div className="panel"><div className="heading"><h3>Jezdci</h3><Users size={20}/></div>
+      <div className="panel"><div className="heading"><h3>Jezdci a stav v databázi</h3><Users size={20}/></div>
+        <p className="muted">Archivace jen skryje jezdce z výběru do nových akcí. Nevymaže jeho historii ani účast ve starších vyúčtováních.</p>
         <form onSubmit={addRider} className="form-row"><Input name="rider" label="Jméno jezdce" placeholder="Jméno a příjmení" required/><Button type="submit" disabled={busy}><Plus size={16}/> Přidat</Button></form>
-        {db.riders.length===0?<p className="muted">Zatím nemáš uložené žádné jezdce.</p>:<div className="rider-list">{db.riders.map(r=><div key={r.id}>{r.name}</div>)}</div>}
+        {db.riders.length===0?<p className="muted">Zatím nemáš uložené žádné jezdce.</p>:<div className="rider-manager">
+          {[...db.riders].sort((a,b)=>Number(!!a.inactive)-Number(!!b.inactive)||a.name.localeCompare(b.name)).map(r=><div className="rider-row" key={r.id}>
+            <div><strong>{r.name}</strong><span>{r.inactive?'Archivovaný':'Aktivní'}</span></div>
+            <Button small secondary onClick={()=>toggleRiderActive(r)}>{r.inactive?<><UserCheck size={15}/> Vrátit</>:<><UserX size={15}/> Archivovat</>}</Button>
+          </div>)}
+        </div>}
       </div>
+      {active&&<div className="panel"><div className="heading"><h3>Účastníci aktuální akce</h3><Users size={20}/></div>
+        <p className="muted">Změň soupisku i po zahájení akce. Když někdo odjede nebo nepřijede, odškrtni ho a ulož. Jeho profil ani starší doklady nezmizí.</p>
+        <form key={active.id+':'+(active.riderIds||[]).join(',')} onSubmit={saveRoster} className="grid-form">
+          <div className="checks">{db.riders.filter(r=>!r.inactive||(active.riderIds||[]).includes(r.id)).map(r=>
+            <label key={r.id}><input type="checkbox" name="riders" value={r.id} defaultChecked={(active.riderIds||[]).includes(r.id)}/>{r.name}{r.inactive&&' (archivovaný)'}</label>)}
+            {db.riders.length===0&&<p className="muted">Nejdřív přidej jezdce.</p>}
+          </div>
+          <Button type="submit" disabled={busy}>Uložit aktuální soupisku</Button>
+        </form>
+        {(active.rosterChanges||[]).length>0&&<details className="roster-history"><summary>Historie změn soupisky ({active.rosterChanges.length})</summary>
+          <div>{[...active.rosterChanges].reverse().map((x,i)=><p key={i}><strong>{db.riders.find(r=>r.id===x.riderId)?.name||'Jezdec'}</strong> · {x.action==='joined'?'přidán':'vyřazen'} · {new Date(x.at).toLocaleString('cs-CZ')}</p>)}</div>
+        </details>}
+      </div>}
     </div>;
   }
   function Backup(){
