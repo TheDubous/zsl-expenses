@@ -34,6 +34,8 @@ jobs:
       - name: Test PWA
         working-directory: web
         run: npm test
+      - name: Bundle official original ZSL workbook
+        run: node web/scripts/fetch-zsl-template.mjs
       - name: Build for GitHub Pages subdirectory
         working-directory: web
         env:
