@@ -90,11 +90,33 @@ export function makePdfDefinition(report,{createdAt=new Date()}={}){
     push(h(section.label));
     if(['private_car','company_car','zsl_car','unassigned'].includes(section.id))
       push({text:section.id==='unassigned'?'Typ vozidla pri tankovaní ešte nie je určený.':'Továrenská značka vozidla, EČV vozidla a jazdy nie sú v aplikácii úplne vyplnené.',style:'subtle',margin:[0,0,0,4]});
-    const rows=section.expenses.map((x,i)=>[
-      String(i+1)+'.',x.merchant||x.receipt_name||'Neurčené',date(x.spent_on),
-      money(x.amount,ccy),expenseStatus(x)
-    ]);
-    push(table(['Poradové číslo dokladu','Dodávateľ / názov výdavku','Dátum','Suma dokladu','Doklady'],rows,[36,'*',67,82,90]));
+    const basic=section.expenses.map((x,i)=>({
+      num:String(i+1)+'.',
+      name:x.merchant||x.receipt_name||'Neurčené',
+      details:x.vehicleDetails||'NEVYPLNENÉ',
+      description:[x.merchant,x.note].filter(Boolean).join(' – ')||x.receipt_name||'—',
+      amount:money(x.amount,ccy),
+      euro:ccy==='EUR'?money(x.amount,'EUR'):NOT_COMPUTED,
+      foreign:ccy==='EUR'?'—':money(x.amount,ccy),
+      state:expenseStatus(x)
+    }));
+    if(section.id==='transport'){
+      push(table(['Poradové číslo dokladu','Dodávateľ','Druh prepravy','Suma v cudzej mene','Suma v EUR'],
+        basic.map(x=>[x.num,x.name,'NEVYPLNENÉ',x.foreign,x.euro]),[41,'*',100,76,76]));
+    }else if(['private_car','company_car','zsl_car'].includes(section.id)){
+      push(table(['Poradové číslo dokladu','Továrenská značka vozidla, EČV vozidla','Suma dokladu za tankovanie v cudzej mene','Suma dokladu za tankovanie v EUR','Doklady'],
+        basic.map(x=>[x.num,x.details,x.foreign,x.euro,x.state]),[40,'*',96,95,78]));
+    }else if(section.id==='lodging'||section.id==='other'){
+      const lodgingSection=section.id==='lodging';
+      push(table(['Poradové číslo dokladu',lodgingSection?'Popis výdavku a množstvo':'Názov výdavku a množstvo',
+        'Suma dokladu v cudzej menej','Suma dokladu v EUR',
+        lodgingSection?'Uplatňovaná čiastka za ubytovanie v EUR':'Uplatňovaná čiastka za výdavok v EUR'],
+        basic.map(x=>[x.num,x.description,x.foreign,x.euro,NOT_COMPUTED]),[40,'*',80,72,105]));
+    }else{
+      push(table(['Poradové číslo dokladu','Dodávateľ / názov výdavku','Dátum','Suma dokladu','Doklady'],
+        section.expenses.map((x,i)=>[String(i+1)+'.',x.merchant||x.receipt_name||'Neurčené',date(x.spent_on),money(x.amount,ccy),expenseStatus(x)]),
+        [36,'*',67,82,90]));
+    }
     push({text:'CELKOM: '+money(section.total,ccy),bold:true,alignment:'right',fontSize:9,margin:[0,0,0,6]});
   }
   push(h('CELKOVÁ SUMA DOKLADOV'));
