@@ -72,7 +72,7 @@ export async function inspectZslXlsx(blob,options={}){
   const data=descendants(doc,'sheetData')[0];
   for(const ref of refs){
    const cell=sourceCell(data,ref);
-   if(cell&&occupied(cell))existing.push(sheet+'!'+ref);
+   if(cell&&!direct(cell,'f')&&occupied(cell))existing.push(sheet+'!'+ref);
   }
  }
  const names=[...sheets.keys()];
