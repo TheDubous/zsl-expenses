@@ -1,6 +1,6 @@
 // Deterministic, offline OCR interpretation. We retain alternative readings for human review.
 const totalHints=/(?:^|\b)(?:celkom|spolu|suma|total|amount|k\s*uhrade|na\s*uhradu|zaplaten[ée]|uhradene|uhradené|gesamtbetrag|gesamtsumme|summe|betrag|paid|endbetrag)(?:\b|:)/i;
-const penalized=/(?:dph|vat|tax|zaklad|základ|netto|base|jednotkov|vr[aá]ten[ée]|cash\s*back|rabatt|z[ľl]ava|discount|zostatok|m[wvv]st|ust\.?)/i;
+const penalized=/(?:dph|vat|tax|zaklad|základ|netto|base|jednotkov|vr[aá]ten[ée]|cash\s*back|rabatt|z[ľl]ava|discount|zostatok|m[wvv]st|ust\.?|ersparnis|ersparniss|ersparn|gespart|sie\s+sparen|sparen\s+sie|nachlass|gutschein|savings?|your\s+savings?|vorteil|ak.tionsrabatt)/i;
 const amountPattern=/(?:\d{1,3}(?:[ .\u00a0]\d{3})+|\d+)[,.]\d{2}(?!\d)/g;
 const BRANDS=[
   ['Pitztaler Gletscherbahn','pitztalergletscherbahn'],
@@ -63,8 +63,12 @@ function moneyCandidates(lines){
     for(const m of matches){
       const amount=parseNumber(m[0]);
       if(!Number.isFinite(amount)||amount<=0||amount>100000)continue;
-      const isTotal=totalHints.test(line)||totalHints.test(lines[index-1]||'');
-      const isBad=penalized.test(line)&&!totalHints.test(line);
+      const prev=lines[index-1]||'';
+      const isBad=penalized.test(line)||(penalized.test(prev)&&!totalHints.test(line));
+      // "Ihre Ersparnis" is NOT the amount paid. It can follow "Summe"; never
+      // inherit that total label for a discount line or an unlabeled savings value.
+      if(isBad)continue;
+      const isTotal=totalHints.test(line)||totalHints.test(prev);
       const hasCurrency=/(?:\bEUR\b|\bEURO\b|\bCZK\b|\bKČ\b|\bCHF\b|€)/i.test(line);
       const score=(isTotal?12:0)+(hasCurrency?3:0)-(isBad?14:0)+(matches.length===1?2:0)+(index>lines.length/3?1:0);
       values.push({amount,score,line,lineNumber:index});
