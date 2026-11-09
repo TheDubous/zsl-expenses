@@ -37,6 +37,7 @@ function App(){
   const [editingEvent,setEditingEvent]=useState(false);
   const [viewingDoc,setViewingDoc]=useState(null);
   const [ocrProgress,setOcrProgress]=useState('');
+  const [ocrMode,setOcrMode]=useState('precise');
   const [online,setOnline]=useState(navigator.onLine);
   const [storage,setStorage]=useState(null);
   const [isPersistent,setIsPersistent]=useState(null);
@@ -157,13 +158,13 @@ function App(){
             const {file,expense}=photos[i];
             try{
               setOcrProgress('Čtu účtenku '+(i+1)+'/'+photos.length+'…');
-              const found=await scanner.scan(file);
+              const found=await scanner.scan(file,{mode:ocrMode});
               const candidate={
                 ...expense,amount:found.amount||0,merchant:found.merchant||'',
                 spent_on:found.spent_on||expense.spent_on,
                 category:found.category||expense.category,
                 payment_method:found.payment_method||'unknown',
-                ocr:{confidence:found.confidence,amountCandidates:found.amountCandidates,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+                ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
               };
               await saveExpense(candidate);scanned++;
             }catch(ocrError){failed++;}
@@ -184,15 +185,15 @@ function App(){
       try{
         setOcrProgress('Čtu existující účtenku…');
         scanner=await createOCRSession(setOcrProgress);
-        const found=await scanner.scan(doc.blob);
+        const found=await scanner.scan(doc.blob,{mode:ocrMode});
         await saveExpense({
           ...expense,
           amount:Number(expense.amount)>0?expense.amount:(found.amount||0),
-          merchant:expense.merchant||found.merchant||'',
+          merchant:expense.ocr&&!expense.ocr.reviewed?(found.merchant||expense.merchant||''):(expense.merchant||found.merchant||''),
           spent_on:found.spent_on||expense.spent_on,
           category:expense.category==='other'?found.category:expense.category,
           payment_method:expense.payment_method==='unknown'?found.payment_method:expense.payment_method,
-          ocr:{confidence:found.confidence,amountCandidates:found.amountCandidates,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+          ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
         });
         setNotice('OCR dokončeno. Zkontroluj navržené údaje v detailu výdaje.');
       }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
@@ -267,7 +268,15 @@ function App(){
   function Documents(){
     return <div className="stack">
       <div className="panel"><div className="heading"><h3>1. Nahraj účtenky</h3><Camera size={20}/></div>
-        <p className="muted">Po nahrání fotografií aplikace zkusí <strong>automaticky přečíst částku, obchodníka a datum</strong>. Rozpoznávání probíhá v telefonu; první spuštění OCR potřebuje stáhnout jazyková data přes internet. Všechny načtené hodnoty je nutné zkontrolovat. PDF zatím nemá automatické OCR.</p>
+        <p className="muted">Aplikace se pokusí přečíst částku, dodavatele a datum. <strong>Důkladný režim</strong> čte účtenku několikrát a zvlášť analyzuje její horní část. Je pomalejší, ale může zlepšit rozpoznání špatně vytištěných dokladů. Výsledky vždy zkontroluj.</p>
+        <div className="ocr-mode-picker">
+          <label htmlFor="ocr-mode">Způsob rozpoznávání</label>
+          <select id="ocr-mode" value={ocrMode} disabled={busy} onChange={e=>setOcrMode(e.target.value)}>
+            <option value="precise">Důkladné – více průchodů (doporučeno)</option>
+            <option value="fast">Rychlé – základ + hlavička</option>
+          </select>
+          <small>OCR běží přímo na telefonu. První použití potřebuje internet k načtení jazykových dat. PDF se zatím automaticky nečte.</small>
+        </div>
         <div className="upload-row">
           <label className="btn filebtn"><Upload size={17}/> Více účtenek<input type="file" accept="image/*,application/pdf" multiple disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
           <label className="btn secondary filebtn"><Camera size={17}/> Vyfotit<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
@@ -417,9 +426,14 @@ function App(){
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
-          {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · důvěra: {editing.ocr.confidence}</strong><p>Zkontroluj částku a potvrď uložení. OCR není účetní ověření.</p>
+          {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>
+            <p>OCR je návrh, ne ověření dokladu. Prohlédni originál, zkontroluj částku i dodavatele a teprve pak ulož.</p>
+            {(editing.ocr.merchantCandidates||[]).length>0&&<div className="ocr-candidates">
+              <span>Možní dodavatelé:</span>
+              {editing.ocr.merchantCandidates.slice(0,4).map(c=><button key={c.name} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('merchant');if(inp)inp.value=c.name}}>{c.name}</button>)}
+            </div>}
             {(editing.ocr.amountCandidates||[]).length>0&&<div className="ocr-candidates">Rozpoznané částky: {editing.ocr.amountCandidates.map(c=><button key={c.amount} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,active?.currency||'EUR')}</button>)}</div>}
-            <details><summary>Zobrazit rozpoznaný text</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
+            <details><summary>Zobrazit rozpoznaný text ({(editing.ocr.scannedPasses||[]).length||1} průchody)</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
           </div>}
           <p className="muted smalltext">Bankovní potvrzení můžeš přiložit později v seznamu dokladů. Změna způsobu platby z karty odstraní původní bankovní přílohu.</p>
           <Button type="submit" disabled={busy}><Check size={17}/> Uložit změny</Button>
