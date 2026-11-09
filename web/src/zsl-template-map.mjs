@@ -8,6 +8,41 @@ const timeValue=s=>/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(s||''))?(Number(s.s
 const t=(sheet,cell,value)=>value==null||String(value).trim()===''?null:{sheet,cell,value:String(value),kind:'text'};
 const n=(sheet,cell,value)=>value==null||!Number.isFinite(Number(value))?null:{sheet,cell,value:Number(value),kind:'number'};
 const S1='s.1 - pokyn',S3='s.3 - výdavky',S4='s.4 - stravné zahr.',S6='s.6 - správa';
+export function recommendedZslSection(expense){
+  // Ownership of a vehicle and eligibility of a meal allowance cannot be
+  // deduced solely from OCR; these items require a one-time human selection.
+  if(expense.zsl_section)return expense.zsl_section;
+  if(expense.category==='fuel'||expense.category==='food')return 'unassigned';
+  if(expense.category==='lodging')return 'lodging';
+  if(expense.category==='travel')return 'transport';
+  return 'other'; // Resort fees, parking and other actual receipts.
+}
+export function exportExpenseReadiness(expense,event){
+  const issues=[],warnings=[],section=recommendedZslSection(expense);
+  const name=expense.merchant||expense.receipt_name||'Neznámá účtenka';
+  if(!expense.receipt_path)issues.push('chybí fotografie nebo PDF účtenky');
+  if(!(Number(expense.amount)>0))issues.push('chybí ověřená částka');
+  if(!String(expense.merchant||'').trim())issues.push('chybí dodavatel');
+  if(expense.ocr?.reviewed===false)warnings.push('automaticky rozpoznané údaje zatím nebyly ručně potvrzené');
+  if(expense.payment_method==='card'&&!expense.bank_path)
+    warnings.push('bankovní potvrzení zatím chybí – částka přesto patří do evidence; potvrzení přilož před odevzdáním');
+  if(!['cash','card'].includes(expense.payment_method))
+    warnings.push('způsob platby zatím není určen');
+  if(event?.currency!=='EUR')issues.push('není zadán bezpečný přepočet z '+(event?.currency||'jiné měny')+' do EUR');
+  if(section==='unassigned'){
+    if(expense.category==='fuel')issues.push('vyber typ vozidla (ZSL / soukromé / právnické osoby)');
+    else if(expense.category==='food')issues.push('vyber zahraniční stravování nebo jinou sekci formuláře');
+    else issues.push('vyber sekci formuláře ZSL');
+  }
+  if(section==='private_car'||section==='company_car')
+    issues.push('chybí podklady pro výpočet náhrady: ujeté km, spotřeba a cena PHM');
+  if(section==='domestic_meal')
+    issues.push('tuzemské stravné vyžaduje samostatné podklady pro výpočet nároku');
+  if(!['transport','zsl_car','lodging','other','foreign_meal'].includes(section)&&section!=='unassigned'&&
+     section!=='private_car'&&section!=='company_car'&&section!=='domestic_meal')
+    issues.push('neznámá sekce výkazu');
+  return {name,section,issues,warnings,canExport:issues.length===0};
+}
 export function buildTemplatePatches({event,trainer,riders=[],expenses=[],funding=[]}){
  const patches=[],warnings=[],skipped=[];
  const add=p=>{if(p)patches.push(p)};
@@ -36,25 +71,14 @@ export function buildTemplatePatches({event,trainer,riders=[],expenses=[],fundin
  };
  const used=Object.fromEntries(Object.keys(ranges).map(k=>[k,new Set()]));
  for(const e of [...expenses].sort((a,b)=>String(a.spent_on||'').localeCompare(String(b.spent_on||'')))){
-  const name=e.merchant||e.receipt_name||'Neurčený dodávateľ';
-  if(!e.receipt_path||e.ocr?.reviewed===false||!(Number(e.amount)>0)||!e.merchant?.trim()){
-   skipped.push(name+': potvrď rozpoznané údaje, dodávateľa a sumu.');continue;
-  }
-  if(e.payment_method==='unknown'){skipped.push(name+': neurčený spôsob platby.');continue;}
-  if(e.payment_method==='card'&&!e.bank_path){skipped.push(name+': chýba bankové potvrdenie.');continue;}
-  if(event?.currency!=='EUR'){skipped.push(name+': prepočet na EUR nie je bezpečne určený.');continue;}
-  let section=e.zsl_section||'';
-  if(!section){
-   if(e.category==='fuel'||e.category==='food')section='unassigned';
-   else if(e.category==='lodging')section='lodging';
-   else if(e.category==='travel')section='transport';
-   else section='other';
-  }
-  if(section==='private_car'||section==='company_car'){
-   skipped.push(name+': výdavky súkromného/firemného auta sa vypočítavajú zo spotreby, kilometrov a vzorcov. Účtenku tam bez údajov nevkladáme.');continue;
-  }
-  if(section==='unassigned'||section==='domestic_meal'){
-   skipped.push(name+': urči správnu sekciu ZSL (palivo alebo strava).');continue;
+  const readiness=exportExpenseReadiness(e,event);
+  const {name,section}=readiness;
+  // Incomplete bank attachments must not erase a correctly recognized receipt
+  // from the financial workbook. We list such issues as warnings, separately.
+  for(const warning of readiness.warnings)warnings.push(name+': '+warning);
+  if(!readiness.canExport){
+    skipped.push(name+': '+readiness.issues.join('; '));
+    continue;
   }
   const cfg=ranges[section];
   if(!cfg){skipped.push(name+': sekcia nie je bezpečne namapovaná.');continue;}
