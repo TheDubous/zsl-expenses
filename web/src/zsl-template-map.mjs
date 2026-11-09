@@ -43,7 +43,7 @@ export function exportExpenseReadiness(expense,event){
     issues.push('neznámá sekce výkazu');
   return {name,section,issues,warnings,canExport:issues.length===0};
 }
-export function buildTemplatePatches({event,trainer,riders=[],expenses=[],funding=[]}){
+export function buildTemplatePatches({event,trainer,riders=[],expenses=[],funding=[],variant='user-double-log'}){
  const patches=[],warnings=[],skipped=[];
  const add=p=>{if(p)patches.push(p)};
  const coach=[trainer?.title,trainer?.name].filter(Boolean).join(' ');
@@ -61,8 +61,18 @@ export function buildTemplatePatches({event,trainer,riders=[],expenses=[],fundin
  const deposits=funding.filter(x=>x.kind==='advance').reduce((s,x)=>s+Math.round(Number(x.amount||0)*100),0)/100;
  if(event?.currency==='EUR'&&deposits>0)add(n(S1,'I30',deposits));
  else if(deposits>0)warnings.push('Suma zálohy v EUR: jiné měny se bez kurzu nepřepočítávají.');
- // These are exact writable rows/columns observed in the original ZSL form.
- const ranges={
+ // CRITICAL: The officially published 2025 ZSL workbook differs from the
+ // user's older "Kufel_2" custom variant. Finance rows were shifted, and
+ // the official OTHER section has only seven rows. Never write below the
+ // "CELKOM" formula as those receipts would not be included in settlement.
+ const official=variant==='official';
+ const ranges=official?{
+  transport:{sheet:S3,start:6,end:10,cols:['C','D','I']},
+  zsl_car:{sheet:S3,start:26,end:35,cols:['C','F','H']},
+  lodging:{sheet:S3,start:40,end:44,cols:['C','F','H']},
+  other:{sheet:S3,start:49,end:55,cols:['C','F','H']},
+  foreign_meal:{sheet:S4,start:74,end:107,cols:['B','C','F','I','J']}
+ }:{
   transport:{sheet:S3,start:6,end:8,cols:['C','D','I']},
   zsl_car:{sheet:S3,start:24,end:33,cols:['C','F','H']},
   lodging:{sheet:S3,start:38,end:42,cols:['C','F','H']},
