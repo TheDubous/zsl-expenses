@@ -29,7 +29,7 @@ function sheetFromCells(cells){
  }).join('');
  return '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+out+'</sheetData></worksheet>';
 }
-async function syntheticTemplate(){
+async function syntheticTemplate({prefilledTrip=false}={}){
  const zip=new JSZip();
  const main='<?xml version="1.0" encoding="UTF-8"?>';
  const sheets=REQUIRED_SHEETS.map((name,i)=>'<sheet name="'+esc(name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join('');
@@ -42,6 +42,7 @@ async function syntheticTemplate(){
   ['I39','<f>SUM(I32:J38)</f><v>0</v>']
  ]);
  for(let i=18;i<28;i++)filled1.set('D'+i,'');
+ if(prefilledTrip)filled1.set('B12','<is><t>28.01.26</t></is>');
  const s3=new Map();
  for(let i=24;i<=33;i++)for(const col of ['C','F','H'])s3.set(col+i,'');
  // The user's template can contain populated vehicle samples. Never overwrite them.
@@ -95,4 +96,16 @@ test('unsafe card documents are skipped, original existing values are not overwr
  const result=buildTemplatePatches({event,trainer,expenses:[{...expense('c',40),payment_method:'card',bank_path:null}],funding:[]});
  assert.equal(result.patches.some(x=>x.group==='receipt:c'),false);
  assert.equal(result.skipped.length,1);
+});
+
+test('a filled Colere-like source cannot silently mix with a new event',async()=>{
+ const file=await syntheticTemplate({prefilledTrip:true});
+ const info=await inspectZslXlsx(file,X);
+ assert.equal(info.hasExistingTrip,true);
+ assert.ok(info.existing.includes('s.1 - pokyn!B12'));
+ await assert.rejects(()=>createFilledXlsx(file,{event,trainer,riders:[],expenses:[],funding:[]},X),/obsahuje termíny nebo výdaje předchozí cesty/);
+ const allowed=await createFilledXlsx(file,{event,trainer,riders:[],expenses:[],funding:[]},{...X,allowExisting:true});
+ const zip=await JSZip.loadAsync(allowed.blob);
+ const s1=await zip.file('xl/worksheets/sheet1.xml').async('string');
+ assert.equal(xmlCellValue(cellValue(s1,'B12')),'28.01.26');
 });
