@@ -6,6 +6,22 @@ const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument
 const xml={DOMParserCtor:DOMParser,XMLSerializerCtor:XMLSerializer};
 const info=await inspectZslXlsx(blob,xml);
 console.log('Official template:',JSON.stringify({variant:info.variant,sheets:info.sheets.length,hasExistingTrip:info.hasExistingTrip,existing:info.existing.length,existingCells:info.existing}));
+// Verify the original foreign-food receipt block begins after its real heading.
+const {default:JSZip}=await import('jszip');
+const parts=await JSZip.loadAsync(bytes);
+const foreignXML=await parts.file('xl/worksheets/sheet5.xml')?.async('string');
+const stringsDoc=new DOMParser().parseFromString(await parts.file('xl/sharedStrings.xml').async('string'),'application/xml');
+const sharedTexts=Array.from(stringsDoc.getElementsByTagName('si')).map(si=>Array.from(si.getElementsByTagName('t')).map(t=>t.textContent).join(''));
+const foreignDoc=new DOMParser().parseFromString(foreignXML,'application/xml');
+for(const row of Array.from(foreignDoc.getElementsByTagName('row')).filter(r=>Number(r.getAttribute('r'))>=69&&Number(r.getAttribute('r'))<=79)){
+  const cells=Array.from(row.getElementsByTagName('c')).flatMap(c=>{
+    const ref=c.getAttribute('r'),v=c.getElementsByTagName('v')[0]?.textContent,formula=c.getElementsByTagName('f')[0]?.textContent;
+    if(!/^(B|C|F|I|J|K|L)\\d+$/.test(ref))return [];
+    const text=c.getAttribute('t')==='s'?sharedTexts[Number(v)]:v||'';
+    return text||formula?[ref+'='+String(formula?'formula:'+formula:text).slice(0,56)]:[];
+  });
+  if(cells.length)console.log('OFFICIAL foreign meal row',row.getAttribute('r'),cells.join(' | '));
+}
 if(info.variant!=='official'||info.sheets.length!==11)
  throw new Error('Downloaded template is not the approved 11-sheet official version.');
 // Public official workbook: inspect numeric placeholder cells, not personal data.
