@@ -7,6 +7,7 @@ export const ZSL_SHEET_TITLES=[
   {id:'tuzemsko',sheet:'s.4 - stravné tuzem.',title:'VYÚČTOVANIE CESTOVNÝCH NÁHRAD - TUZEMSKO'},
   {id:'zahranicie',sheet:'s.4 - stravné zahr.',title:'VYÚČTOVANIE CESTOVNÝCH NÁHRAD - ZAHRANIČIE'},
   {id:'jazdy',sheet:'s.5 - kniha jázd',title:'KNIHA JÁZD'},
+  {id:'jazdy2',sheet:'s.5 - kniha jázd_Kufel_2',title:'KNIHA JÁZD'},
   {id:'sprava',sheet:'s.6 - správa',title:'SPRÁVA Z PRACOVNEJ CESTY'}
 ];
 export const ZSL_EXPENSE_SECTIONS=[
