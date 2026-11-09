@@ -103,10 +103,11 @@ test('preserves populated source cells, formulae and image bytes while shifting 
  assert.match(wb,/fullCalcOnLoad="1"/);
  for(let i=0;i<11;i++)assert.ok(zip.file('xl/worksheets/sheet'+(i+1)+'.xml'));
 });
-test('unsafe card documents are skipped, original existing values are not overwritten',()=>{
+test('bank proof pending does not suppress a verified receipt in original XLSX',()=>{
  const result=buildTemplatePatches({event,trainer,expenses:[{...expense('c',40),payment_method:'card',bank_path:null}],funding:[]});
- assert.equal(result.patches.some(x=>x.group==='receipt:c'),false);
- assert.equal(result.skipped.length,1);
+ assert.equal(result.patches.some(x=>x.group==='receipt:c'),true);
+ assert.equal(result.skipped.length,0);
+ assert.ok(result.warnings.some(x=>x.includes('bankovní potvrzení')));
 });
 
 test('a filled Colere-like source cannot silently mix with a new event',async()=>{
