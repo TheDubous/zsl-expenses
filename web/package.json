@@ -1,6 +1,6 @@
 {
   "name": "zsl-expenses-local-pwa",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -14,7 +14,8 @@
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tesseract.js": "^7.0.0"
+    "tesseract.js": "^7.0.0",
+    "pdfmake": "^0.2.20"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.4.1",
