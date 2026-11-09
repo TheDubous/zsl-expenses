@@ -1,5 +1,25 @@
 # ZSL Expenses · Lokální PWA (bez databázového serveru)
 
+## v0.8.1 – oprava finančního zápisu do originálního ZSL Excelu
+
+Předchozí export mohl stáhnout XLSX, do kterého se dopsali pouze sportovci, zatímco všechny účtenky byly přeskočeny. Příčina:
+- čekání na bankovní potvrzení chybně blokovalo zápis i správně rozpoznané částky;
+- palivo a strava bez vybrané sekce byly tiše vynechány;
+- oficiální ZSL v20250430 má jinak posunuté řádky než uživatelův variantní soubor \`s.5 - kniha jázd_Kufel_2\`.
+
+**Oprava v aplikaci:**
+- **Náhled → Zařazení účtenek do původního Excelu** nyní ukazuje u KAŽDÉ účtenky původního dodavatele, částku, správnou volbu sekce ZSL, důvod vynechání a případná upozornění. Sekci lze změnit přímo zde jedním výběrem.
+- Chybějící potvrzení platby kartou je **varování**, nikoli blokace zápisu účetní částky. Potvrzení se stále vyžaduje před předáním kompletních PDF příloh.
+- **Oficiální šablona ZSL v20250430**: \`s.3 - výdavky\` doprava řádky **6–10**, vozidlo ZSL **26–35**, ubytování **40–44**, ostatní vedlejší náklady **49–55**. Soukromá starší variantní šablona používá dopravu 6–8, vozidlo 24–33, ubytování 38–42 a ostatní 47–59. **Tato volba je automatická podle skutečně načtené varianty XLSX.**
+- Při více položkách, než má příslušná sekce volných řádků, se částka **nikdy nezapíše pod výpočtový řádek**.
+- Export výslovně uvádí **počet skutečně zapsaných účtenek a jejich celkovou částku**, nikoli jen počet změněných buněk. Pokud by se zapisovala jen jména a žádný výdaj, export se odmítne s důvodem, aby se neodeslal neúplný výkaz.
+- Přesné testy používají skutečný veřejný ZSL XLSX (při GitHub Actions buildu) s částkami **127,78 EUR tankování**, **315 EUR ubytování**, **650 EUR ostatní** a **55,84 EUR zahraniční strava**, celkem **1 148,62 EUR**. Kontroluje se, že jsou hodnoty opravdu uvnitř správných sekcí a pod jejich originálními vzorci.
+- Všechny formule a původní formátování zůstávají zachované. **Po otevření staženého XLSX v Microsoft Excelu je třeba nechat přepočítat vzorce.** Rychlý náhled v aplikaci Soubory na iPhonu nemusí zobrazit čerstvé výsledky vzorců. Před finálním odesláním porovnej i list \`s.3 - výdavky\` a částku v náhledu aplikace.
+
+**Bezpečnost:** žádná databáze ani přenos účtenek na GitHub. Starší místní uložená data zůstávají beze změny. Doporučuje se Kompletní ZIP záloha před testem.
+
+---
+
 ## v0.8 – vestavěná šablona ZSL + spolehlivější čtení úzkých účtenek
 
 **ZSL Excel se už nemusí nahrávat.** Při nasazení GitHub Pages se stáhne veřejně vydaná oficiální šablona [ZSL, soubor v20250430](https://www.zvazslovenskeholyzovania.sk/wp-content/uploads/ZSL-Cestovny-prikaz-sablona-v20250430.xlsx). Její přesný SHA-256 se kontroluje během sestavení a výsledný XLSX se zahrne do offline PWA. Při prvním otevření aplikace se kopie uloží do IndexedDB na iPhonu. Aplikace pak vytváří kopii tohoto skutečného XLSX, ne nový formulář.
