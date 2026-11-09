@@ -24,14 +24,6 @@ for(const row of Array.from(foreignDoc.getElementsByTagName('row')).filter(r=>Nu
 }
 if(info.variant!=='official'||info.sheets.length!==11)
  throw new Error('Downloaded template is not the approved 11-sheet official version.');
-// Public official workbook: inspect numeric placeholder cells, not personal data.
-const rawZip=(await import('jszip')).default;
-const parts=await rawZip.loadAsync(bytes);
-const expenseSheet=await parts.file('xl/worksheets/sheet3.xml').async('string');
-for(const ref of ['H25','H39','H48']){
- const escaped=expenseSheet.match(new RegExp('<c\\b[^>]*\\br="'+ref+'"[^>]*>([\\s\\S]*?)<\\/c>'));
- console.log('Official default cell '+ref+':',escaped?escaped[1].slice(0,150):'NO CELL');
-}
 const data={
  event:{name:'SANDBOX',kind:'Sústredenie',startsOn:'2026-11-09',endsOn:'2026-11-10',
   startPlace:'Test',location:'Test',country:'AUT',purpose:'SBX',currency:'EUR'},
