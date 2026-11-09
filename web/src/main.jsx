@@ -9,6 +9,7 @@ import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
+import {exportExpenseReadiness} from './zsl-template-map.mjs';
 import {storeOriginalTemplate,getTemplateInfo,ensureBundledZslTemplate,downloadFilledOriginal} from './zsl-xlsx.js';
 import {downloadAttachmentsPdf} from './attachments-pdf.js';
 import './style.css';
@@ -253,12 +254,19 @@ function App(){
       setNotice('Originální ZSL XLSX byl uložen pouze do tohoto telefonu: '+info.filename+'. Původní data ani vzorce nepřepisujeme.');
     });
   }
+  async function selectExpenseSection(expense,section){
+    await run(async()=>{
+      await saveExpense({...expense,zsl_section:section});
+      setExportAudit(null);
+      setNotice('Účtenka '+(expense.merchant||expense.receipt_name||'')+' byla zařazena do formuláře ZSL. Zápis zkontroluj v Náhledu.');
+    });
+  }
   async function downloadOriginalWorkbook(allowExisting=false){
     if(!active||busy)return;
     await run(async()=>{
       const result=await downloadFilledOriginal({event:active,trainer,riders:reportRiders,expenses,funding},{allowExisting});
       const {blob,...audit}=result;setExportAudit(audit);
-      setNotice('Stažena kopie původního XLSX: '+result.changes.length+' buněk doplněno, '+result.conflicts.length+' kolizí, '+result.skipped.length+' nezařazených/neúplných účtenek.');
+      setNotice('Původní XLSX stažen: '+result.financialReceiptCount+' z '+result.expectedReceiptCount+' výdajů, částka '+currency(result.financialAmount,active.currency)+'. Nezapsané položky: '+result.skipped.length+'; konflikty: '+result.conflicts.length+'.');
     });
   }
   async function downloadProofsPdf(){
@@ -295,6 +303,10 @@ function App(){
         </div>
         {zslReport?.sections.find(x=>x.id==='unassigned')?.expenses.length>0&&
           <p className="zsl-warning">Tankovanie: {zslReport.sections.find(x=>x.id==='unassigned').expenses.length} dokladov potrebuje určiť typ vozidla v s.3 - výdavky.</p>}
+        {expenses.length>0&&<p className="zsl-warning">
+          Do původního XLSX je nyní připraveno {expenses.filter(e=>exportExpenseReadiness(e,active).canExport).length} z {expenses.length} výdajů.
+          {expenses.some(e=>!exportExpenseReadiness(e,active).canExport)&&' Otevři Náhled, kde lze chybějící zařazení opravit u každé účtenky.'}
+        </p>}
         <div className="report-actions">
           <Button disabled={busy||!templateInfo||templateInfo.hasExistingTrip} onClick={()=>downloadOriginalWorkbook(false)}><FileSpreadsheet size={17}/> Stáhnout vyplněný původní XLSX</Button>
           <Button disabled={busy||expenses.length===0} secondary onClick={downloadProofsPdf}><Download size={17}/> Stáhnout přílohy PDF</Button>
@@ -447,6 +459,7 @@ function App(){
         onEditEvent={()=>setEditingEvent(true)} onImportTemplate={importXlsxTemplate}
         onDownloadXlsx={downloadOriginalWorkbook} onDownloadAttachments={downloadProofsPdf}
         templateInfo={templateInfo} exportAudit={exportAudit} attachmentAudit={attachmentAudit} busy={busy} onLoadBuiltIn={loadDefaultTemplate}
+        onSetExpenseSection={selectExpenseSection} onEditExpense={expense=>setEditing(expense)}
       />:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
       <footer>Lokální prototyp · ukládej pravidelné ZIP zálohy · bez cloudové synchronizace</footer>
     </main>
