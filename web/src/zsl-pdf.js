@@ -147,8 +147,15 @@ export function makePdfDefinition(report,{createdAt=new Date()}={}){
   ]));
   push(table(['Dátum','Miesto začiatok - koniec','Hodina od - do','Účel jazdy','Počet prejdených km'],[],[64,'*',84,'*',77]));
 
+  // The original template also contains a separate second travel log (Kufel_2).
+  // It is represented explicitly but no vehicle data from the original SAMPLE is copied.
+  push(...title(ZSL_SHEET_TITLES[5],'druhá kniha jázd – nevyplnené',true));
+  push(p('Druhá kniha jázd je samostatný viditeľný list pôvodnej šablóny. Identita vozidla ani jazdy sa nesmú kopírovať zo vzorového súboru bez overenia.'));
+  push(fields([['Obdobie',[event?.startsOn,event?.endsOn].filter(Boolean).join(' - ')],['Vozidlo',NOT_COMPUTED],['EČV',NOT_COMPUTED],['Majiteľ MV',NOT_COMPUTED]]));
+  push(table(['Dátum','Miesto začiatok - koniec','Hodina od - do','Účel jazdy','Počet prejdených km'],[],[64,'*',84,'*',77]));
+
   // s.6 (trip report)
-  push(...title(ZSL_SHEET_TITLES[5],'prezenčná listina a zhodnotenie',true));
+  push(...title(ZSL_SHEET_TITLES[6],'prezenčná listina a zhodnotenie',true));
   push(h('SPRÁVA Z PRACOVNEJ CESTY'));
   push({text:event?.reportText||'Správa z pracovnej cesty nebola doposiaľ doplnená.',margin:[0,3,0,15],fontSize:10});
   push(fields([['Vypracoval',trainer?.name],['dňa',date(event?.endsOn)]]));
