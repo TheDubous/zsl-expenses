@@ -35,7 +35,7 @@ const CENT=value=>Math.round((Number(value)||0)*100);
 export const num2=value=>Math.round((Number(value)||0)*100)/100;
 function sumCents(list){return list.reduce((acc,item)=>acc+CENT(item.amount),0)/100}
 export function expenseSection(expense){
-  if(ZSL_EXPENSE_SECTIONS.some(x=>x.id===expense.zsl_section&&x.id!=='unassigned'))return expense.zsl_section;
+  if(ZSL_EXPENSE_SECTIONS.some(x=>x.id===expense.zsl_section))return expense.zsl_section;
   if(expense.category==='fuel')return 'unassigned'; // Never assume a vehicle owner.
   if(expense.category==='lodging')return 'lodging';
   if(expense.category==='travel')return 'transport';
