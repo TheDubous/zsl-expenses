@@ -160,9 +160,9 @@ test('card purchase can be written to original XLSX before bank proof arrives',a
  assert.ok(prepared.warnings.some(x=>/bankovní potvrzení/.test(x)));
  const file=await syntheticTemplate({variant:'official'});
  const result=await createFilledXlsx(file,{event,trainer,expenses:[fuel],funding:[]},X);
- assert.ok(result.changes.some(x=>x.sheet==='s.3 - výdavky'&&x.cell==='H25'&&x.value===127.78));
+ assert.ok(result.changes.some(x=>x.sheet==='s.3 - výdavky'&&x.cell==='H26'&&x.value===127.78));
  const zip=await JSZip.loadAsync(result.blob);
- assert.equal(xmlCellValue(cellValue(await zip.file('xl/worksheets/sheet3.xml').async('string'),'H25')),'127.78');
+ assert.equal(xmlCellValue(cellValue(await zip.file('xl/worksheets/sheet3.xml').async('string'),'H26')),'127.78');
 });
 test('fuel and meal receipts awaiting ZSL category are visible individually in readiness list',()=>{
  const fuel={...expense('fuel-1',127.78),zsl_section:'',category:'fuel',payment_method:'card',bank_path:null};
