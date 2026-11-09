@@ -15,7 +15,7 @@ test('exact heading names from original ZSL template are preserved',()=>{
  assert.deepEqual(ZSL_SHEET_TITLES.map(x=>x.title),[
  'CESTOVNÝ PRÍKAZ','PREUKÁZANÉ CESTOVNÉ VÝDAVKY',
  'VYÚČTOVANIE CESTOVNÝCH NÁHRAD - TUZEMSKO',
- 'VYÚČTOVANIE CESTOVNÝCH NÁHRAD - ZAHRANIČIE','KNIHA JÁZD','SPRÁVA Z PRACOVNEJ CESTY'
+ 'VYÚČTOVANIE CESTOVNÝCH NÁHRAD - ZAHRANIČIE','KNIHA JÁZD','KNIHA JÁZD','SPRÁVA Z PRACOVNEJ CESTY'
  ]);
  assert.ok(ZSL_EXPENSE_SECTIONS.some(x=>x.label==='Motorové vozidlo ZSL'));
 });
