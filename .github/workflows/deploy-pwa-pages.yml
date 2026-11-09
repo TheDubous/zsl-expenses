@@ -36,6 +36,8 @@ jobs:
         run: npm test
       - name: Bundle official original ZSL workbook
         run: node web/scripts/fetch-zsl-template.mjs
+      - name: Verify real official workbook and exported XLSX
+        run: node web/scripts/verify-bundled-template.mjs
       - name: Build for GitHub Pages subdirectory
         working-directory: web
         env:
