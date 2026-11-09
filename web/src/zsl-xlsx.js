@@ -182,7 +182,7 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
  const {sheets,book}=await readWorkbook(zip,options);
  const Parser=options.DOMParserCtor||globalThis.DOMParser;
  const Serializer=options.XMLSerializerCtor||globalThis.XMLSerializer;
- const {patches,warnings,skipped}=buildTemplatePatches({event,trainer,riders,expenses,funding});
+ const {patches,warnings,skipped}=buildTemplatePatches({event,trainer,riders,expenses,funding,variant:inspected.variant});
  const grouped=getRowGroup(patches);
  const changes=[],conflicts=[];
  const touched=new Map();
