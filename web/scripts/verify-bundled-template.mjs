@@ -6,6 +6,24 @@ const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument
 const xml={DOMParserCtor:DOMParser,XMLSerializerCtor:XMLSerializer};
 const info=await inspectZslXlsx(blob,xml);
 console.log('Official template:',JSON.stringify({variant:info.variant,sheets:info.sheets.length,hasExistingTrip:info.hasExistingTrip,existing:info.existing.length,existingCells:info.existing}));
+const zi=(await import('jszip')).default;
+const raw=await zi.loadAsync(bytes);
+const stringsXml=await raw.file('xl/sharedStrings.xml').async('string');
+const stringDoc=new DOMParser().parseFromString(stringsXml,'application/xml');
+const strs=Array.from(stringDoc.getElementsByTagName('si')).map(x=>
+  Array.from(x.getElementsByTagName('t')).map(t=>t.textContent).join(''));
+const expDoc=new DOMParser().parseFromString(await raw.file('xl/worksheets/sheet3.xml').async('string'),'application/xml');
+for(const row of Array.from(expDoc.getElementsByTagName('row')).filter(r=>Number(r.getAttribute('r'))<=65)){
+ const entries=Array.from(row.getElementsByTagName('c')).flatMap(c=>{
+   const v=c.getElementsByTagName('v')[0]?.textContent||'';
+   const formula=c.getElementsByTagName('f')[0]?.textContent;
+   const txt=c.getAttribute('t')==='s'?strs[Number(v)]:
+     c.getAttribute('t')==='inlineStr'?c.getElementsByTagName('t')[0]?.textContent:v;
+   return txt||formula?[c.getAttribute('r')+'='+String(formula?'FORMULA:'+formula:txt).slice(0,46)]:[];
+ });
+ if(entries.length)console.log('OFFICIAL s.3 ROW',row.getAttribute('r'),entries.slice(0,9).join(' | '));
+}
+
 if(info.variant!=='official'||info.sheets.length!==11)
  throw new Error('Downloaded template is not the approved 11-sheet official version.');
 // Public official workbook: inspect numeric placeholder cells, not personal data.
