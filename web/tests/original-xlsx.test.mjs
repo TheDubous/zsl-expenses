@@ -184,3 +184,37 @@ test('unreviewed OCR can be exported for checking but is flagged prominently',()
  assert.ok(res.warnings.some(x=>x.includes('nebyly ručně potvrzené')));
  assert.ok(res.warnings.some(x=>x.includes('způsob platby')));
 });
+
+test('official template writes into shifted cost rows; custom template keeps original older rows',async()=>{
+ const hotel={id:'hotel1',category:'lodging',merchant:'Hotel SBX',amount:315,payment_method:'cash',receipt_path:'r_hotel'};
+ const lift={id:'lift1',category:'resort',merchant:'Pitztaler',amount:650,payment_method:'card',bank_path:null,receipt_path:'r_lift'};
+ const diesel={id:'diesel1',category:'fuel',zsl_section:'zsl_car',merchant:'Gutmann',amount:127.78,payment_method:'card',bank_path:null,receipt_path:'r_diesel'};
+ const inputs={event,trainer,riders:[],expenses:[hotel,lift,diesel],funding:[]};
+ const official=await createFilledXlsx(await syntheticTemplate({variant:'official'}),inputs,X);
+ assert.equal(official.financialReceiptCount,3);
+ assert.equal(official.financialAmount,1092.78);
+ for(const [ref,value] of [['H26',127.78],['H40',315],['H49',650]])
+  assert.ok(official.changes.some(x=>x.sheet==='s.3 - výdavky'&&x.cell===ref&&x.value===value),'official '+ref);
+ const custom=await createFilledXlsx(await syntheticTemplate({variant:'user-double-log'}),inputs,X);
+ for(const [ref,value] of [['H25',127.78],['H38',315],['H47',650]])
+  assert.ok(custom.changes.some(x=>x.sheet==='s.3 - výdavky'&&x.cell===ref&&x.value===value),'custom '+ref);
+});
+test('official ZSL OTHER section stops before summary formula on row 56',async()=>{
+ const expenses=Array.from({length:8},(_,i)=>({
+  id:'other'+i,category:'resort',merchant:'Skipass '+i,amount:100+i,
+  receipt_path:'r'+i,payment_method:'cash'
+ }));
+ const file=await syntheticTemplate({variant:'official'});
+ const out=await createFilledXlsx(file,{event,trainer,riders:[],expenses,funding:[]},X);
+ assert.equal(out.financialReceiptCount,7);
+ assert.equal(out.skipped.length,1);
+ assert.ok(out.skipped[0].includes('nie sú voľné riadky'));
+ assert.ok(out.changes.some(x=>x.cell==='H55'));
+ assert.ok(!out.changes.some(x=>x.cell==='H56'||x.cell==='H57'));
+});
+test('no valid financial receipt throws rather than downloading an Excel with only names',async()=>{
+ const empty={...expense('unassigned',127.78),zsl_section:'',category:'fuel'};
+ await assert.rejects(()=>createFilledXlsx(await syntheticTemplate({variant:'official'}),
+  {event,trainer,riders:[{name:'Athlete A'}],expenses:[empty],funding:[]},X),
+  /Excel by neobsahoval žádnou finanční položku/);
+});
