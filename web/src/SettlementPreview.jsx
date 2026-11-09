@@ -14,9 +14,12 @@ export default function SettlementPreview({
  const [allowExisting,setAllowExisting]=useState(false);
  const proposed=buildTemplatePatches({event,trainer,riders,expenses,funding,variant:templateInfo?.variant});
  const checks=expenses.map(expense=>({expense,...exportExpenseReadiness(expense,event)}));
- const valid=checks.filter(x=>x.canExport);
+ const plannedIds=new Set(proposed.patches
+   .filter(p=>String(p.group||'').startsWith('receipt:'))
+   .map(p=>String(p.group).slice(8)));
+ const valid=checks.filter(x=>x.canExport&&plannedIds.has(String(x.expense.id)));
  const readyTotal=valid.reduce((sum,x)=>sum+Math.round(Number(x.expense.amount||0)*100),0)/100;
- const blocked=checks.filter(x=>!x.canExport);
+ const blocked=checks.filter(x=>!plannedIds.has(String(x.expense.id)));
  return <div className="stack">
   <div className="panel">
    <div className="heading"><h3><FileSpreadsheet size={20}/> Originální soubor ZSL – Excel</h3></div>
@@ -93,8 +96,9 @@ export default function SettlementPreview({
        </label>
        <button type="button" className="btn secondary small" onClick={()=>onEditExpense(expense)}>Zkontrolovat údaje</button>
      </div>
-     {status.canExport?<div className="zsl-preflight-status ready"><CheckCircle2 size={16}/> Připravené pro zápis do originálního Excelu</div>:
-      <div className="zsl-preflight-status blocked"><AlertCircle size={16}/> {status.issues.join('; ')}</div>}
+     {status.canExport&&plannedIds.has(String(expense.id))?
+       <div className="zsl-preflight-status ready"><CheckCircle2 size={16}/> Připravené pro zápis do originálního Excelu</div>:
+       <div className="zsl-preflight-status blocked"><AlertCircle size={16}/> {status.issues.length?status.issues.join('; '):'Sekce ZSL má vyčerpaný počet řádků. V této šabloně není pro další účtenku místo.'}</div>}
      {status.warnings.map((warn,i)=><p className="zsl-preflight-warning" key={i}>Poznámka: {warn}</p>)}
    </div>)}
    </div>
