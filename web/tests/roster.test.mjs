@@ -18,3 +18,9 @@ test('roster order and accidental duplicates do not add phantom participants',()
  assert.deepEqual(result.riderIds,['r1','r2']);
  assert.equal(result.rosterChanges.length,2);
 });
+
+test('roster reason is kept for departures',()=>{
+ const x=applyRosterChange({riderIds:['athlete1']},[],'2026-11-09T12:00:00Z','Nemoc');
+ assert.equal(x.rosterChanges[0].reason,'Nemoc');
+ assert.deepEqual(x.riderIds,[]);
+});
