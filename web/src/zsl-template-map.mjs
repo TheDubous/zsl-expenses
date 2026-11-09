@@ -1,5 +1,6 @@
 // Exact-cell mapping for original ZSL workbook. Do not overwrite existing data/formulas.
-export const REQUIRED_SHEETS=['s.1 - pokyn','s.3 - výdavky','s.4 - stravné tuzem.','s.4 - stravné zahr.','s.5 - kniha jázd','s.5 - kniha jázd_Kufel_2','s.6 - správa','Náhrady INT 2021','pomocný hárok','DIÉTY SLOVENSKO','str.4 - stravné INT'];
+export const REQUIRED_SHEETS=['s.1 - pokyn','s.3 - výdavky','s.4 - stravné tuzem.','s.4 - stravné zahr.','s.5 - kniha jázd','s.6 - správa','Náhrady INT 2021','pomocný hárok','DIÉTY SLOVENSKO','str.4 - stravné INT'];
+export const VARIANT_SHEETS=['s.2 - súhlas MV','s.5 - kniha jázd_Kufel_2'];
 export const TEMPLATE_ID='zsl-original-xlsx-template';
 const rounded=n=>Math.round(Number(n)*100)/100;
 const dateText=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))?[s.slice(8,10),s.slice(5,7),s.slice(2,4)].join('.'):null;
