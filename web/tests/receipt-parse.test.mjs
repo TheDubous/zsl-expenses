@@ -43,3 +43,18 @@ test('only savings amount is not silently interpreted as spent',()=>{
  const x=parseReceiptText('Ihre Ersparnis 17,30 EUR');
  assert.equal(x.amount,null);
 });
+
+test('IMG_7834 thermal receipt German spaced labels and repeated payment',()=>{
+ const x=parseReceiptText('GUTMANN GMBH\nDISK TANKSTELLE\nUNTERDORF 2\n6473 WENNS\n03.11.2026 14:42\nMENGE SUMME FUR\nDIESEL 58,24L 127,78\nSTEUERANTEIL 21,30 EUR\nPREIS/L 2,194 EUR\nG E S A M T BETRAG EUR: 127,78\nEUROCARD 127,78\nMASTERCARD CONTACTLESS\nMWST GESAMT EUR 21,30');
+ assert.equal(x.merchant,'Gutmann');
+ assert.equal(x.amount,127.78);
+ assert.equal(x.category,'fuel');
+ assert.equal(x.payment_method,'card');
+ assert.equal(x.spent_on,'2026-11-03');
+ assert.equal(x.amountCandidates[0].amount,127.78);
+ assert.equal(x.amountCandidates.some(c=>c.amount===21.3),false);
+});
+test('spaced German grand total without visible payment line',()=>{
+ const x=parseReceiptText('GUTMANN\nG E S A M T B E T R A G  EUR\n127,78\nSTEUERANTEIL\n21,30 EUR');
+ assert.equal(x.amount,127.78);
+});

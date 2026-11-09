@@ -9,7 +9,7 @@ import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
-import {storeOriginalTemplate,getTemplateInfo,downloadFilledOriginal} from './zsl-xlsx.js';
+import {storeOriginalTemplate,getTemplateInfo,ensureBundledZslTemplate,downloadFilledOriginal} from './zsl-xlsx.js';
 import {downloadAttachmentsPdf} from './attachments-pdf.js';
 import './style.css';
 
@@ -50,7 +50,8 @@ function App(){
 
   const refresh=useCallback(async()=>{const all=await loadAll();setDb(all);
     const e=await storageEstimate();setStorage(e);
-    setTemplateInfo(await getTemplateInfo());
+    const current=await getTemplateInfo();
+    setTemplateInfo(current||await ensureBundledZslTemplate().catch(()=>null));
   },[]);
   useEffect(()=>{refresh().catch(e=>setError(e.message||String(e))).finally(()=>setReady(true))},[refresh]);
   useEffect(()=>{const on=()=>setOnline(true),off=()=>setOnline(false);window.addEventListener('online',on);window.addEventListener('offline',off);return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off)}},[]);
@@ -175,7 +176,7 @@ function App(){
                 spent_on:found.spent_on||expense.spent_on,
                 category:found.category||expense.category,
                 payment_method:found.payment_method||'unknown',
-                ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+                ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
               };
               await saveExpense(candidate);scanned++;
             }catch(ocrError){failed++;}
@@ -204,7 +205,7 @@ function App(){
           spent_on:found.spent_on||expense.spent_on,
           category:expense.category==='other'?found.category:expense.category,
           payment_method:expense.payment_method==='unknown'?found.payment_method:expense.payment_method,
-          ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+          ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
         });
         setNotice('OCR dokončeno. Zkontroluj navržené údaje v detailu výdaje.');
       }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
@@ -237,6 +238,13 @@ function App(){
     await run(async()=>{const r=await importBackup(file);setActiveId(null);setView('overview');setNotice('Obnoveno '+r.events+' akcí, '+r.expenses+' výdajů a '+r.documents+' příloh.')})
   }
   async function doExport(){await run(async()=>{await exportEvent(active,expenses,funding);setNotice('Vyúčtování ZIP připravené ke stažení.')})}
+  async function loadDefaultTemplate(){
+    await run(async()=>{
+      const info=await ensureBundledZslTemplate();
+      if(!info)throw new Error('Výchozí ZSL šablonu se nepodařilo načíst.');
+      setNotice('Oficiální šablona ZSL je uložená přímo v telefonu a připravená k exportu.');
+    });
+  }
   async function importXlsxTemplate(file){
     if(!file)return;
     await run(async()=>{
@@ -438,7 +446,7 @@ function App(){
         event={active} trainer={trainer} riders={reportRiders} expenses={expenses} funding={funding}
         onEditEvent={()=>setEditingEvent(true)} onImportTemplate={importXlsxTemplate}
         onDownloadXlsx={downloadOriginalWorkbook} onDownloadAttachments={downloadProofsPdf}
-        templateInfo={templateInfo} exportAudit={exportAudit} attachmentAudit={attachmentAudit} busy={busy}
+        templateInfo={templateInfo} exportAudit={exportAudit} attachmentAudit={attachmentAudit} busy={busy} onLoadBuiltIn={loadDefaultTemplate}
       />:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
       <footer>Lokální prototyp · ukládej pravidelné ZIP zálohy · bez cloudové synchronizace</footer>
     </main>
@@ -498,7 +506,7 @@ function App(){
           </Select>
           <Input label="Továrenská značka vozidla, EČV vozidla (pokud se týká paliva)" name="vehicleDetails" defaultValue={editing.vehicleDetails||''} placeholder="Např. Renault Trafic / AA-619RJ"/>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
-          {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>
+          {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>{editing.ocr.receiptCropDetected&&<p className="muted smalltext">Úzká účtenka byla před čtením automaticky izolována a zvětšena.</p>}
             <p>OCR je návrh, ne ověření dokladu. Prohlédni originál, zkontroluj částku i dodavatele a teprve pak ulož.</p>
             {(editing.ocr.merchantCandidates||[]).length>0&&<div className="ocr-candidates">
               <span>Možní dodavatelé:</span>

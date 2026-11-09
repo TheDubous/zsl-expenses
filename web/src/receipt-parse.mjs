@@ -1,6 +1,6 @@
 // Deterministic, offline OCR interpretation. We retain alternative readings for human review.
-const totalHints=/(?:^|\b)(?:celkom|spolu|suma|total|amount|k\s*uhrade|na\s*uhradu|zaplaten[ée]|uhradene|uhradené|gesamtbetrag|gesamtsumme|summe|betrag|paid|endbetrag)(?:\b|:)/i;
-const penalized=/(?:dph|vat|tax|zaklad|základ|netto|base|jednotkov|vr[aá]ten[ée]|cash\s*back|rabatt|z[ľl]ava|discount|zostatok|m[wvv]st|ust\.?|ersparnis|ersparniss|ersparn|gespart|sie\s+sparen|sparen\s+sie|nachlass|gutschein|savings?|your\s+savings?|vorteil|ak.tionsrabatt)/i;
+const totalHints=/(?:^|\b)(?:celkom(?:\s*-\s*eft)?|spolu|suma|total|amount|k\s*uhrade|na\s*uhradu|zaplaten[ée]|uhradene|uhradené|gesamt\s*betrag|gesamtsumme|summe|betrag|eurocard|gesamtbetrag|paid|endbetrag)(?:\b|:)/i;
+const penalized=/(?:dph|vat|tax|zaklad|základ|netto|base|jednotkov|vr[aá]ten[ée]|cash\s*back|rabatt|z[ľl]ava|discount|zostatok|m[wvv]st|ust\.?|ersparnis|ersparniss|ersparn|gespart|sie\s+sparen|sparen\s+sie|nachlass|gutschein|savings?|your\s+savings?|vorteil|steueranteil|preis\s*\/\s*l|pro\s*liter|ak.tionsrabatt)/i;
 const amountPattern=/(?:\d{1,3}(?:[ .\u00a0]\d{3})+|\d+)[,.]\d{2}(?!\d)/g;
 const BRANDS=[
   ['Pitztaler Gletscherbahn','pitztalergletscherbahn'],
@@ -58,6 +58,9 @@ function parseNumber(value){
 function moneyCandidates(lines){
   const values=[];
   lines.forEach((line,index)=>{
+    // Thermal printers often letter-space headings: G E S A M T BETRAG.
+    // Compare a normalized label as well as the OCR's original spacing.
+    const compactLabel=line.replace(/\s+/g,'');
     const matches=[...line.matchAll(amountPattern)];
     if(/\b\d{1,2}\.\d{1,2}\.20\d{2}\b/.test(line)&&!totalHints.test(line))return;
     for(const m of matches){
@@ -68,7 +71,7 @@ function moneyCandidates(lines){
       // "Ihre Ersparnis" is NOT the amount paid. It can follow "Summe"; never
       // inherit that total label for a discount line or an unlabeled savings value.
       if(isBad)continue;
-      const isTotal=totalHints.test(line)||totalHints.test(prev);
+      const isTotal=totalHints.test(line)||totalHints.test(prev)||totalHints.test(compactLabel)||totalHints.test(prev.replace(/\s+/g,''));
       const hasCurrency=/(?:\bEUR\b|\bEURO\b|\bCZK\b|\bKČ\b|\bCHF\b|€)/i.test(line);
       const score=(isTotal?12:0)+(hasCurrency?3:0)-(isBad?14:0)+(matches.length===1?2:0)+(index>lines.length/3?1:0);
       values.push({amount,score,line,lineNumber:index});

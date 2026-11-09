@@ -31,5 +31,13 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Unit tests
         run: npm test
+      - name: Bundle verified original ZSL workbook
+        working-directory: .
+        run: node web/scripts/fetch-zsl-template.mjs
+      - name: Verify real published workbook works with Excel writer
+        working-directory: .
+        run: node web/scripts/verify-bundled-template.mjs
       - name: Build PWA
         run: npm run build
+      - name: Verify original template is in website output
+        run: test -s dist/ZSL-Cestovny-prikaz.xlsx

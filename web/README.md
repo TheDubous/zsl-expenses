@@ -1,5 +1,19 @@
 # ZSL Expenses · Lokální PWA (bez databázového serveru)
 
+## v0.8 – vestavěná šablona ZSL + spolehlivější čtení úzkých účtenek
+
+**ZSL Excel se už nemusí nahrávat.** Při nasazení GitHub Pages se stáhne veřejně vydaná oficiální šablona [ZSL, soubor v20250430](https://www.zvazslovenskeholyzovania.sk/wp-content/uploads/ZSL-Cestovny-prikaz-sablona-v20250430.xlsx). Její přesný SHA-256 se kontroluje během sestavení a výsledný XLSX se zahrne do offline PWA. Při prvním otevření aplikace se kopie uloží do IndexedDB na iPhonu. Aplikace pak vytváří kopii tohoto skutečného XLSX, ne nový formulář.
+
+**Pozor na rozdíl šablon:** uživatelem dodaná soukromá jedenáctilistová verze má \`s.5 - kniha jázd_Kufel_2\`. Oficiální veřejná jedenáctilistová verze obsahuje místo ní \`s.2 - súhlas MV\`. Abychom nezveřejňovali osobní údaje a nebyla potřeba žádná ruční nahrávka, vestavěná je **veřejná oficiální** verze. Ostatních deset společných listů a jejich standardní oblasti pro zápis aplikace podporuje. Pokud již máš v aplikaci nahranou vlastní verzi, zůstane zachovaná a nepřepíše se. Pokud ji potřebuješ zvolit jako zdroj místo oficiální verze, stále můžeš použít volitelný import **Použít vlastní upravený XLSX**.
+
+V originální oficiální šabloně jsou některé statické texty v jinak finančních sloupcích a vzorce. **Nejde o předchozí vyúčtování.** Nyní se rozlišují od skutečných zadaných výdajů. Původní hodnoty ani vzorce se přesto nepřepisují.
+
+**OCR příkladu \`IMG_7834.jpeg\`:** účtenka GUTMANN GMBH / DISK Tankstelle má správnou částku **127,78 EUR**, datum **03. 11. 2026**, platbu **kartou** a diesel. Pro světlý úzký termopapír na dřevěném pozadí přibyla detekce hranic papíru, zvětšení pouze jeho obsahu a několik OCR průchodů; parser rozpoznává i rozdělený nápis **G E S A M T BETRAG** a nezamění cenu za DPH/STE UERANTEIL nebo \`Ihre Ersparnis\`. Fotografie se zpracovává lokálně. Pravidla a výřezy jsou otestované na syntetických vzorcích; úspěšnost přímo na fyzickém iPhonu **není zatím garantovaná**. V aplikaci u problematické účtenky vyber **Doklady → Důkladné → Přečíst znovu** a výsledek ručně potvrď.
+
+Výstupy zůstávají oddělené: **vyplněný originální XLSX** a **samostatné PDF příloh**.
+
+---
+
 ## v0.7 – PŘESNÝ ORIGINÁLNÍ XLSX + SAMOSTATNÉ PDF PŘÍLOH
 
 **Zásadní změna proti v0.6:** aplikace už pro vyúčtování negeneruje neodpovídající vlastní PDF formulář. Místo toho upraví kopii **skutečného souboru ZSL-Cestovny-prikaz.xlsx**, který jí uživatel jednorázově vybere z aplikace Soubory. Doklady exportuje do samostatného PDF.
