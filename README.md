@@ -1,5 +1,10 @@
 # ZSL Expenses
 
+## Aktualizace v0.4
+Lokální PWA teď obsahuje **náhled připravovaných dat pro originální Excel ZSL** (`s.1 – pokyn`, `s.3 – výdavky`), bohatší profil trenéra (včetně adresy, telefonu a IBAN), úpravy soupisky a archivaci jezdců. Fotografie účtenek se nově pokouší číst pomocí OCR v telefonu; zjištěné částky je nutné ručně potvrdit. Dříve nahrané doklady lze znovu analyzovat. Podrobný popis a omezení: [web/README.md](./web/README.md).
+
+**Pozor:** náhled ještě nevpisuje údaje do originálního XLSX. OCR při prvním použití vyžaduje internet a může se mýlit. Před používáním nové verze vytvoř kompletní ZIP zálohu; stejné lokální úložiště jako ve v0.3 zůstává zachované.
+
 Aplikace pro vyúčtování snowboardových **Sústredení a Pretekov**.
 
 ## Doporučená verze: lokální PWA pro iPhone a Android
