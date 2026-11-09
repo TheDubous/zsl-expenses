@@ -9,7 +9,7 @@ import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
-import {storeOriginalTemplate,getTemplateInfo,downloadFilledOriginal} from './zsl-xlsx.js';
+import {storeOriginalTemplate,getTemplateInfo,ensureBundledZslTemplate,downloadFilledOriginal} from './zsl-xlsx.js';
 import {downloadAttachmentsPdf} from './attachments-pdf.js';
 import './style.css';
 
@@ -50,7 +50,8 @@ function App(){
 
   const refresh=useCallback(async()=>{const all=await loadAll();setDb(all);
     const e=await storageEstimate();setStorage(e);
-    setTemplateInfo(await getTemplateInfo());
+    const current=await getTemplateInfo();
+    setTemplateInfo(current||await ensureBundledZslTemplate().catch(()=>null));
   },[]);
   useEffect(()=>{refresh().catch(e=>setError(e.message||String(e))).finally(()=>setReady(true))},[refresh]);
   useEffect(()=>{const on=()=>setOnline(true),off=()=>setOnline(false);window.addEventListener('online',on);window.addEventListener('offline',off);return()=>{window.removeEventListener('online',on);window.removeEventListener('offline',off)}},[]);
@@ -237,6 +238,13 @@ function App(){
     await run(async()=>{const r=await importBackup(file);setActiveId(null);setView('overview');setNotice('Obnoveno '+r.events+' akcí, '+r.expenses+' výdajů a '+r.documents+' příloh.')})
   }
   async function doExport(){await run(async()=>{await exportEvent(active,expenses,funding);setNotice('Vyúčtování ZIP připravené ke stažení.')})}
+  async function loadDefaultTemplate(){
+    await run(async()=>{
+      const info=await ensureBundledZslTemplate();
+      if(!info)throw new Error('Výchozí ZSL šablonu se nepodařilo načíst.');
+      setNotice('Oficiální šablona ZSL je uložená přímo v telefonu a připravená k exportu.');
+    });
+  }
   async function importXlsxTemplate(file){
     if(!file)return;
     await run(async()=>{
@@ -438,7 +446,7 @@ function App(){
         event={active} trainer={trainer} riders={reportRiders} expenses={expenses} funding={funding}
         onEditEvent={()=>setEditingEvent(true)} onImportTemplate={importXlsxTemplate}
         onDownloadXlsx={downloadOriginalWorkbook} onDownloadAttachments={downloadProofsPdf}
-        templateInfo={templateInfo} exportAudit={exportAudit} attachmentAudit={attachmentAudit} busy={busy}
+        templateInfo={templateInfo} exportAudit={exportAudit} attachmentAudit={attachmentAudit} busy={busy} onLoadBuiltIn={loadDefaultTemplate}
       />:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
       <footer>Lokální prototyp · ukládej pravidelné ZIP zálohy · bez cloudové synchronizace</footer>
     </main>
