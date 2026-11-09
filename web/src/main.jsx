@@ -7,6 +7,7 @@ import {exportBackup,importBackup,exportEvent,downloadBlob} from './archive.js';
 import SettlementPreview from './SettlementPreview.jsx';
 import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
+import {applyRosterChange} from './roster.mjs';
 import './style.css';
 
 const initial={trainers:[],riders:[],events:[],funding:[],expenses:[]};
@@ -96,15 +97,10 @@ function App(){
   async function saveRoster(e){
     e.preventDefault();if(!active)return;
     const f=new FormData(e.currentTarget),next=f.getAll('riders');
-    const old=active.riderIds||[];
-    const delta=[
-      ...next.filter(id=>!old.includes(id)).map(riderId=>({riderId,action:'joined',at:new Date().toISOString()})),
-      ...old.filter(id=>!next.includes(id)).map(riderId=>({riderId,action:'left',at:new Date().toISOString()}))
-    ];
     await run(async()=>{
-      await putOne('events',{...active,riderIds:next,rosterChanges:[...(active.rosterChanges||[]),...delta]});
-      setNotice('Aktuální soupiska aktualizována. Historie změn zůstává zachovaná.');
-    })
+      await putOne('events',applyRosterChange(active,next));
+      setNotice('Soupiska byla aktualizována; odjezdy a návraty jsou uložené v historii.');
+    });
   }
   async function toggleRiderActive(rider){
     await run(async()=>{
