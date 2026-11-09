@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg', 'apple-touch-icon.png', 'icon-192.png'],
+      includeAssets: ['icon.svg', 'apple-touch-icon.png', 'icon-192.png', 'ZSL-Cestovny-prikaz.xlsx'],
       manifest: {
         id: './',
         name: 'ZSL Expenses',
@@ -29,7 +29,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: base+'index.html',
-        globPatterns: ['**/*.{html,css,js,svg,webp,png}'],
+        globPatterns: ['**/*.{html,css,js,svg,webp,png,xlsx}'],
         cleanupOutdatedCaches: true
       }
     })
