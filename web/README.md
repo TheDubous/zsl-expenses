@@ -18,6 +18,11 @@
 - Ukládání originálu probíhá jen v IndexedDB v telefonu pod identifikátorem `zsl-original-xlsx-template`. Originál je součástí Kompletní ZIP zálohy i obnovy, stejně jako účtenky.
 - Zdrojový Excel vybraný v PWA **nenahráváme do GitHubu**. Repo obsahuje pouze programový kód a syntetické testy bez osobních dat.
 
+### Ochrana před smícháním dvou vyúčtování
+Když vybereš **již vyplněný** Colere příklad (nebo jiný soubor obsahující staré termíny a výdaje), aplikace zobrazí varování a **zablokuje běžný export**. Při novém soustředění zvol čistý originální formulář ZSL. Jen pokud jde skutečně o **stejnou rozpracovanou cestu**, lze v záložce Náhled zaškrtnout výslovné potvrzení „chci doplniť existujúci výkaz“. Stávající buňky a vzorce ani tehdy nepřepíše.
+
+Předvyplněné informace o autech v obou knihách jízd se zachovávají i při použití čisté šablony. Výraz „předvyplněné údaje zachovat“ se **nesmí** zaměňovat za automatické přenášení starých výdajů do nové akce.
+
 ### Přesná mapa z vyplněného Colere vzoru
 - `s.1 - pokyn`: osobní údaje trenéra, termíny, místa, účastníci, případně `I30` pro zálohu; součtové vzorce `I32:I40` zůstávají původní.
 - `s.3 - výdavky`: doprava **řádky 6–8**, tankování vozidla ZSL **24–33 (C,F,H)**, ubytování **38–42 (C,F,H)**, jiné výdaje **47–59 (C,F,H)**.
