@@ -421,6 +421,10 @@ function App(){
     {editing&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEditing(null)}}>
       <div className="modal"><div className="heading"><h2>Upravit doklad</h2><button aria-label="Zavřít" onClick={()=>setEditing(null)}><X size={20}/></button></div>
         <form key={editing.id} onSubmit={updateExpense} className="grid-form">
+          <div className="receipt-edit-image">
+            <span className="muted">Porovnej rozpoznaný text s původní účtenkou:</span>
+            <Button small secondary onClick={()=>setViewingDoc(editing.receipt_path)}><Receipt size={15}/> Zobrazit originální účtenku</Button>
+          </div>
           <Input label="Obchodník / dodavatel" name="merchant" defaultValue={editing.merchant} placeholder="Např. Slovnaft"/>
           <div className="two-col"><Input label="Datum" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label="Částka" name="amount" defaultValue={String(editing.amount||'')} inputMode="decimal" required/></div>
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
