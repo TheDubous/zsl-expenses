@@ -105,3 +105,31 @@
   .zsl-accounting-row.not-computed strong{font-size:10px}
   .report-actions .btn{width:100%}
 }
+
+
+/* v0.7: true original XLSX import, separate document PDF and export audit */
+.zsl-download-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.zsl-download-option{background:#202f48;border:1px solid #384b68;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:8px}
+.zsl-download-option>svg{color:#ac96ff}
+.zsl-download-option h4{margin:0;font-size:15px;color:#f6f8ff}
+.zsl-download-option p{flex:1;font-size:13px;color:#aec0db;line-height:1.6;margin:0 0 8px}
+.zsl-download-option .btn{align-self:stretch}
+.zsl-message{display:flex;align-items:start;gap:10px;font-size:13px;line-height:1.55;border:1px solid #a37052;background:#4b352e;color:#ffdfba;border-radius:12px;margin:12px 0;padding:12px}
+.zsl-message svg{flex:none;margin-top:2px}
+.zsl-message.success{background:#184237;color:#baf3d9;border-color:#4e937d}
+.zsl-message small{display:block;margin-top:6px}
+.zsl-message>div{min-width:0;overflow-wrap:anywhere}
+.zsl-controls{display:flex;gap:9px;flex-wrap:wrap}
+.zsl-controls>.btn{flex:1 1 160px}
+.zsl-audit{margin-top:15px;padding:13px;border-radius:14px;background:#18273f;border:1px solid #344b69}
+.zsl-audit details{margin:12px 0}
+.zsl-audit summary{font-size:13px;font-weight:800;color:#d7d0ff;cursor:pointer}
+.zsl-audit-entries{display:grid;gap:5px;max-height:430px;overflow-y:auto;overflow-wrap:anywhere;padding:9px 0}
+.zsl-audit-entries>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;font-size:12px;padding:9px;border-bottom:1px solid #314564}
+.zsl-audit-entries>div strong{color:#ece7ff}.zsl-audit-entries>div span{color:#c7d3eb}
+.zsl-alert-list{padding:11px;margin:10px 0;border-radius:12px;background:#372f32;border:1px solid #66515b}
+.zsl-alert-list>strong{font-size:13px}
+.zsl-alert-list p{font-size:12px;color:#e5c8ba;display:flex;align-items:start;gap:8px;margin:9px 0 0}
+.zsl-alert-list p svg{flex-shrink:0}
+.zsl-download-option .btn:disabled,.filebtn.disabled{opacity:.5}
+@media(max-width:650px){.zsl-download-split{grid-template-columns:1fr}.zsl-audit-entries>div{grid-template-columns:1fr;gap:4px}}
