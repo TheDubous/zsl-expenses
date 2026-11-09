@@ -5,7 +5,7 @@ const rounded=n=>Math.round(Number(n)*100)/100;
 const dateText=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))?[s.slice(8,10),s.slice(5,7),s.slice(2,4)].join('.'):null;
 const timeValue=s=>/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(s||''))?(Number(s.slice(0,2))*60+Number(s.slice(3,5)))/1440:null;
 const t=(sheet,cell,value)=>value==null||String(value).trim()===''?null:{sheet,cell,value:String(value),kind:'text'};
-const n=(sheet,cell,value)=>value==null||!Number.isFinite(Number(value))?null:{sheet,cell,value:rounded(value),kind:'number'};
+const n=(sheet,cell,value)=>value==null||!Number.isFinite(Number(value))?null:{sheet,cell,value:Number(value),kind:'number'};
 const S1='s.1 - pokyn',S3='s.3 - výdavky',S4='s.4 - stravné zahr.',S6='s.6 - správa';
 export function buildTemplatePatches({event,trainer,riders=[],expenses=[],funding=[]}){
  const patches=[],warnings=[],skipped=[];
@@ -74,7 +74,7 @@ export function buildTemplatePatches({event,trainer,riders=[],expenses=[],fundin
   }else if(section==='foreign_meal'){
    cells.push(t(S4,'B'+row,dateText(e.spent_on)),t(S4,'C'+row,'Pokladničný doklad zo strav. zariadenia'),t(S4,'F'+row,name),t(S4,'I'+row,'EUR'),n(S4,'J'+row,amount));
   }
-  cells.filter(Boolean).forEach(add);
+  cells.filter(Boolean).forEach(p=>add({...p,group:'receipt:'+e.id,rowStart:cfg.start,rowEnd:cfg.end}));
  }
  if(event?.reportText){
   add(t(S6,'B3',event.reportText));add(t(S6,'D20',trainer?.name));
