@@ -8,6 +8,8 @@ import SettlementPreview from './SettlementPreview.jsx';
 import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
 import {applyRosterChange} from './roster.mjs';
+import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
+import {downloadZslPdf} from './zsl-pdf.js';
 import './style.css';
 
 const initial={trainers:[],riders:[],events:[],funding:[],expenses:[]};
@@ -54,6 +56,8 @@ function App(){
   const summary=useMemo(()=>summarize(expenses,funding),[expenses,funding]);
   const trainer=db.trainers.find(x=>x.id===active?.trainerId);
   const participants=active?.riderIds?.map(id=>db.riders.find(r=>r.id===id)?.name).filter(Boolean)||[];
+  const reportRiders=useMemo(()=>db.riders.filter(r=>(active?.riderIds||[]).includes(r.id)),[db.riders,active?.riderIds]);
+  const zslReport=useMemo(()=>active?makeZslReport({event:active,trainer,riders:reportRiders,expenses,funding}):null,[active,trainer,reportRiders,expenses,funding]);
 
   async function run(action){
     setBusy(true);setError('');setNotice('');
@@ -91,7 +95,7 @@ function App(){
     if(f.get('start')&&f.get('end')&&f.get('end')<f.get('start')){setError('Datum konce nemůže být před začátkem.');return}
     await run(async()=>{
       const idEvent=uid();
-      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),advanceNumber:String(f.get('advanceNumber')||''),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
+      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),advanceNumber:String(f.get('advanceNumber')||''),reportText:String(f.get('reportText')||''),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
       if(advance>0)await putOne('funding',{id:uid(),eventId:idEvent,kind:'advance',amount:advance,occurredOn:today(),note:'Počáteční záloha',createdAt:new Date().toISOString()});
       setActiveId(idEvent);setNewEvent(false);setView('overview');setNotice('Akce byla vytvořena a uložena do telefonu.');
     })
@@ -129,7 +133,7 @@ function App(){
         startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),
         endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),
         location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
-        advanceNumber:String(f.get('advanceNumber')||'')
+        advanceNumber:String(f.get('advanceNumber')||''),reportText:String(f.get('reportText')||'')
       });
       setEditingEvent(false);setNotice('Údaje cesty byly aktualizované.');
     });
@@ -203,7 +207,8 @@ function App(){
     e.preventDefault();const f=new FormData(e.currentTarget),val=decimal(f.get('amount'));
     if(!Number.isFinite(val)||val<0){setError('Neplatná částka výdaje.');return}
     await run(async()=>{
-      await saveExpense({...editing,merchant:String(f.get('merchant')||'').trim(),spent_on:f.get('spentOn')||'',amount:val,category:f.get('category'),payment_method:f.get('method'),note:String(f.get('note')||''),ocr:editing.ocr?{...editing.ocr,reviewed:true}:undefined});
+      await saveExpense({...editing,merchant:String(f.get('merchant')||'').trim(),spent_on:f.get('spentOn')||'',amount:val,category:f.get('category'),payment_method:f.get('method'),zsl_section:f.get('zslSection')==='auto'?'':String(f.get('zslSection')||''),
+      vehicleDetails:String(f.get('vehicleDetails')||'').trim(),note:String(f.get('note')||''),ocr:editing.ocr?{...editing.ocr,reviewed:true}:undefined});
       setEditing(null);setNotice('Údaje účtenky uložené.');
     })
   }
@@ -225,6 +230,13 @@ function App(){
     await run(async()=>{const r=await importBackup(file);setActiveId(null);setView('overview');setNotice('Obnoveno '+r.events+' akcí, '+r.expenses+' výdajů a '+r.documents+' příloh.')})
   }
   async function doExport(){await run(async()=>{await exportEvent(active,expenses,funding);setNotice('Vyúčtování ZIP připravené ke stažení.')})}
+  async function doDownloadPdf(){
+    if(!active||busy)return;
+    await run(async()=>{
+      const result=await downloadZslPdf({event:active,trainer,riders:reportRiders,expenses,funding});
+      setNotice('Kontrolní PDF celého výkazu bylo vytvořeno: '+result.filename+'. Obsahuje i nevyplněné části ZSL.');
+    });
+  }
 
   function Dashboard(){
     const groups=CATEGORIES.map(c=>({...c,value:expenses.filter(x=>x.category===c.id).reduce((s,x)=>s+Number(x.amount),0)}));
@@ -233,13 +245,29 @@ function App(){
     const dough=parts.length?'conic-gradient('+parts.join(',')+')':'conic-gradient(#374760 0% 100%)';
     return <div className="stack">
       <div className="stats">
-        <div className="metric"><span>Celkem přijaté zálohy</span><strong>{currency(summary.deposit,active.currency)}</strong></div>
-        <div className="metric"><span>Útrata na dokladech</span><strong>{currency(summary.spent,active.currency)}</strong></div>
-        <div className={'metric main '+(summary.remaining<0?'negative':'')}><span>Zbývá ze zálohy</span><strong>{currency(summary.remaining,active.currency)}</strong></div>
+        <div className="metric"><span>Suma zálohy v EUR / přijaté zálohy</span><strong>{currency(summary.deposit,active.currency)}</strong></div>
+        <div className="metric"><span>Výdavok celkom (evidované)</span><strong>{currency(summary.spent,active.currency)}</strong></div>
+        <div className={'metric main '+(summary.remaining<0?'negative':'')}><span>Doplatok / Preplatok (orientačne)</span><strong>{currency(summary.remaining,active.currency)}</strong></div>
       </div>
       <div className="panel"><div className="heading"><h3>Čerpání zálohy</h3><Wallet size={20}/></div>
         <div className="track"><div style={{width:(summary.deposit>summary.returned?Math.min(100,Math.max(0,summary.spent/(summary.deposit-summary.returned)*100)):0)+'%'}}/></div>
         <div className="between muted smalltext"><span>Vráceno: {currency(summary.returned,active.currency)}</span><span>{summary.deposit>summary.returned?Math.round(summary.spent/(summary.deposit-summary.returned)*100):0} % využito</span></div>
+      </div>
+      <div className="panel zsl-overview">
+        <div className="heading"><h3><FileSpreadsheet size={19}/> Zúčtovanie oprávnených výdavkov</h3></div>
+        <p className="muted smalltext">Položky přesně podle listu <strong>s.1 - pokyn</strong>. Zadané doklady jsou zatím orientační; stravné, další náhrady a konečné schválení nejsou vypočítané.</p>
+        <div className="zsl-accounting-rows">
+          {zslReport?.settlement.map(row=><div key={row.id} className={'zsl-accounting-row '+(row.amount==null?'not-computed':'')}>
+            <span>{row.label}</span><strong>{row.amount==null?NOT_COMPUTED:currency(row.amount,active.currency)}</strong>
+          </div>)}
+        </div>
+        {zslReport?.sections.find(x=>x.id==='unassigned')?.expenses.length>0&&
+          <p className="zsl-warning">Tankovanie: {zslReport.sections.find(x=>x.id==='unassigned').expenses.length} dokladov potrebuje určiť typ vozidla v s.3 - výdavky.</p>}
+        <div className="report-actions">
+          <Button disabled={busy} onClick={doDownloadPdf}><Download size={17}/> Stáhnout celý výkaz PDF</Button>
+          <Button secondary onClick={()=>setView('preview')}><FileSpreadsheet size={17}/> Náhled listů ZSL</Button>
+        </div>
+        <p className="muted smalltext">PDF bude obsahovat údaje trenéra včetně IBAN. Nešifrovaný PDF soubor ukládej a sdílej bezpečně; originální účtenky zůstávají zvlášť v ZIPu.</p>
       </div>
       <div className="panel"><div className="heading"><h3>Výdaje podle kategorií</h3><Receipt size={20}/></div>
         <div className="chart-layout">
@@ -381,7 +409,7 @@ function App(){
         <Select label="Aktuální akce" value={active?.id||''} onChange={e=>{setActiveId(e.target.value);setView('overview')}}>{events.map(ev=><option key={ev.id} value={ev.id}>{ev.kind==='Preteky'?'🏁':'🏔️'} {ev.name} – {db.trainers.find(t=>t.id===ev.trainerId)?.name||'Trenér'}</option>)}</Select>
         <span>{active?.kind} · {showDate(active?.startsOn)}{active?.endsOn&&' – '+showDate(active.endsOn)}</span></div>}
       <div className="tab-nav">{[[ 'overview',Wallet,'Přehled'],['documents',Receipt,'Doklady'],['preview',FileSpreadsheet,'Náhled'],['people',Users,'Lidé'],['backup',HardDrive,'Záloha']].map(([name,Icon,label])=><button key={name} className={view===name?'active':''} onClick={()=>setView(name)}><Icon size={18}/>{label}</button>)}</div>
-      {view==='people'?<People/>:view==='backup'?<Backup/>:active?(view==='overview'?<Dashboard/>:view==='preview'?<SettlementPreview event={active} trainer={trainer} riders={db.riders.filter(r=>(active.riderIds||[]).includes(r.id))} expenses={expenses} funding={funding} onEditEvent={()=>setEditingEvent(true)}/>:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
+      {view==='people'?<People/>:view==='backup'?<Backup/>:active?(view==='overview'?<Dashboard/>:view==='preview'?<SettlementPreview event={active} trainer={trainer} riders={db.riders.filter(r=>(active.riderIds||[]).includes(r.id))} expenses={expenses} funding={funding} onEditEvent={()=>setEditingEvent(true)} onDownloadPdf={doDownloadPdf} busy={busy}/>:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
       <footer>Lokální prototyp · ukládej pravidelné ZIP zálohy · bez cloudové synchronizace</footer>
     </main>
     {newEvent&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setNewEvent(false)}}>
@@ -396,6 +424,7 @@ function App(){
           <div className="two-col"><Input label="Miesto odchodu" name="startPlace"/><Input label="Čas odchodu" name="startTime" type="time"/></div>
           <div className="two-col"><Input label="Miesto návratu" name="endPlace"/><Input label="Čas návratu" name="endTime" type="time"/></div>
           <Input label="Číslo zálohy (volitelné)" name="advanceNumber"/>
+          <label className="input-label"><span>SPRÁVA Z PRACOVNEJ CESTY (volitelné)</span><textarea name="reportText" rows="4" placeholder="Shrnutí průběhu soustředění nebo závodů…"/></label>
           <div className="two-col"><Input label="Počáteční záloha" name="advance" defaultValue="0" inputMode="decimal" required/><Select label="Měna" name="currency"><option>EUR</option><option>CZK</option><option>CHF</option></Select></div>
           <div className="input-label"><span>Jezdci</span><div className="checks">{db.riders.length===0&&<p className="muted">Jezdce přidej v záložce Lidé.</p>}{db.riders.map(r=><label key={r.id}><input type="checkbox" name="riders" value={r.id}/>{r.name}</label>)}</div></div>
           <Button type="submit" disabled={busy}>Vytvořit soustředění / závody</Button>
@@ -414,6 +443,7 @@ function App(){
           <div className="two-col"><Input name="startPlace" label="Miesto odchodu" defaultValue={active.startPlace||''}/><Input name="startTime" type="time" label="Čas odchodu" defaultValue={active.startTime||''}/></div>
           <div className="two-col"><Input name="endPlace" label="Miesto návratu" defaultValue={active.endPlace||''}/><Input name="endTime" type="time" label="Čas návratu" defaultValue={active.endTime||''}/></div>
           <Input name="advanceNumber" label="Číslo zálohy" defaultValue={active.advanceNumber||''}/>
+          <label className="input-label"><span>SPRÁVA Z PRACOVNEJ CESTY (s.6 - správa)</span><textarea name="reportText" rows="5" defaultValue={active.reportText||''} placeholder="Průběh, trénink, závody, výsledky a zhodnocení cesty…"/></label>
           <Button disabled={busy} type="submit"><Check size={17}/> Uložit cestovní údaje</Button>
         </form>
       </div>
@@ -429,6 +459,12 @@ function App(){
           <div className="two-col"><Input label="Datum" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label="Částka" name="amount" defaultValue={String(editing.amount||'')} inputMode="decimal" required/></div>
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
+          <Select label="Zaradenie výdavku podľa s.3 - výdavky" name="zslSection" defaultValue={editing.zsl_section||'auto'}>
+            <option value="auto">Automaticky podľa kategórie (palivo zostane nezařadené)</option>
+            {ZSL_EXPENSE_SECTIONS.filter(section=>section.id!=='unassigned').map(section=><option key={section.id} value={section.id}>{section.label}</option>)}
+            <option value="unassigned">NEZARADENÉ - vyžaduje kontrolu</option>
+          </Select>
+          <Input label="Továrenská značka vozidla, EČV vozidla (pokud se týká paliva)" name="vehicleDetails" defaultValue={editing.vehicleDetails||''} placeholder="Např. Renault Trafic / AA-619RJ"/>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
           {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>
             <p>OCR je návrh, ne ověření dokladu. Prohlédni originál, zkontroluj částku i dodavatele a teprve pak ulož.</p>
