@@ -1,17 +1,25 @@
 import React,{useState} from 'react';
 import {FileSpreadsheet,FileText,Upload,Download,AlertCircle,CheckCircle2,ShieldCheck,ClipboardList} from 'lucide-react';
-import {buildTemplatePatches,REQUIRED_SHEETS} from './zsl-template-map.mjs';
+import {buildTemplatePatches,exportExpenseReadiness,recommendedZslSection,REQUIRED_SHEETS} from './zsl-template-map.mjs';
+import {currency} from './utils.mjs';
 
 function Message({children,type='warning'}){
  return <div className={'zsl-message '+type}>{type==='warning'?<AlertCircle size={17}/>:<CheckCircle2 size={17}/>}<div>{children}</div></div>;
 }
 export default function SettlementPreview({
  event,trainer,riders=[],expenses=[],funding=[],
- onEditEvent,onImportTemplate,onDownloadXlsx,onDownloadAttachments,onLoadBuiltIn,templateInfo,exportAudit,attachmentAudit,busy=false
+ onEditEvent,onImportTemplate,onDownloadXlsx,onDownloadAttachments,onLoadBuiltIn,onSetExpenseSection,onEditExpense,templateInfo,exportAudit,attachmentAudit,busy=false
 }){
  const [details,setDetails]=useState(false);
  const [allowExisting,setAllowExisting]=useState(false);
- const proposed=buildTemplatePatches({event,trainer,riders,expenses,funding});
+ const proposed=buildTemplatePatches({event,trainer,riders,expenses,funding,variant:templateInfo?.variant});
+ const checks=expenses.map(expense=>({expense,...exportExpenseReadiness(expense,event)}));
+ const plannedIds=new Set(proposed.patches
+   .filter(p=>String(p.group||'').startsWith('receipt:'))
+   .map(p=>String(p.group).slice(8)));
+ const valid=checks.filter(x=>x.canExport&&plannedIds.has(String(x.expense.id)));
+ const readyTotal=valid.reduce((sum,x)=>sum+Math.round(Number(x.expense.amount||0)*100),0)/100;
+ const blocked=checks.filter(x=>!plannedIds.has(String(x.expense.id)));
  return <div className="stack">
   <div className="panel">
    <div className="heading"><h3><FileSpreadsheet size={20}/> Originální soubor ZSL – Excel</h3></div>
@@ -42,7 +50,8 @@ export default function SettlementPreview({
       <FileSpreadsheet size={27}/>
       <h4>1. Původní ZSL výkaz (XLSX)</h4>
       <p>Stejný excelový soubor jako originál; pouze doplněné vstupní buňky v příslušných listech. Vzorce se přepočítají po otevření v Excelu.</p>
-      <button className="btn" onClick={()=>onDownloadXlsx(allowExisting)} disabled={busy||!templateInfo||(templateInfo.hasExistingTrip&&!allowExisting)}><Download size={17}/> Stáhnout vyplněný originál</button>
+      <button className="btn" onClick={()=>onDownloadXlsx(allowExisting)} disabled={busy||!templateInfo||(templateInfo.hasExistingTrip&&!allowExisting)||(expenses.length>0&&valid.length===0)}><Download size={17}/> Stáhnout vyplněný originál</button>
+      {expenses.length>0&&valid.length===0&&<p className="zsl-blocked-export">Žádný výdaj ještě není připravený pro zápis. Vyber sekce výdajů níže; jinak by byl Excel prázdný.</p>}
     </div>
     <div className="zsl-download-option">
       <FileText size={27}/>
@@ -55,19 +64,65 @@ export default function SettlementPreview({
   </div>
 
   <div className="panel">
+   <div className="heading"><h3><ClipboardList size={20}/> Zařazení účtenek do původního Excelu</h3></div>
+   <p className="muted">Každá účtenka má přesnou sekci ZSL. U paliva potřebujeme znát majitele vozidla, u jídla správný typ výdaje. Účtenky bez bankovního potvrzení lze do Excelu zapsat; potvrzení však musíš doplnit před odevzdáním.</p>
+   <div className="counts">
+     <div><strong>{valid.length} / {expenses.length}</strong><span>Výdajů připravených k zápisu</span></div>
+     <div><strong>{currency(readyTotal,event.currency)}</strong><span>Očekávaná suma zápisu</span></div>
+     <div><strong>{blocked.length}</strong><span>Potřebují zařazení</span></div>
+   </div>
+   {expenses.length===0&&<Message>Pro kontrolu finančních buněk přidej do akce alespoň jednu účtenku.</Message>}
+   <div className="zsl-preflight-list">
+   {checks.map(({expense,...status})=><div className="zsl-preflight-item" key={expense.id}>
+     <div className="zsl-preflight-top">
+       <div><strong>{expense.merchant||expense.receipt_name||'Neurčený dodavatel'}</strong>
+         <small>{expense.spent_on||'Bez data'} · {expense.receipt_name||'Doklad'} · {expense.payment_method==='card'?'Karta':expense.payment_method==='cash'?'Hotovost':'Platba neurčena'}</small>
+       </div>
+       <span>{currency(expense.amount,event.currency)}</span>
+     </div>
+     <div className="zsl-preflight-controls">
+       <label>Kam zapsat v ZSL?
+         <select value={recommendedZslSection(expense)} disabled={busy} onChange={e=>onSetExpenseSection(expense,e.target.value)}>
+           <option value="unassigned">Vyžaduje rozhodnutí – nezařazeno</option>
+           <option value="zsl_car">s.3 – Motorové vozidlo ZSL (tankovanie)</option>
+           <option value="private_car">s.3 – Súkromné vozidlo (vyžaduje km)</option>
+           <option value="company_car">s.3 – Vozidlo právnickej osoby (vyžaduje km)</option>
+           <option value="transport">s.3 – Cestovné / doprava</option>
+           <option value="lodging">s.3 – Ubytovanie</option>
+           <option value="other">s.3 – INÉ vedľajšie výdavky</option>
+           <option value="foreign_meal">s.4 – Príspevok na stravu zahraničie</option>
+           <option value="domestic_meal">s.4 – Stravné tuzemsko (vyžaduje podklady)</option>
+         </select>
+       </label>
+       <button type="button" className="btn secondary small" onClick={()=>onEditExpense(expense)}>Zkontrolovat údaje</button>
+     </div>
+     {status.canExport&&plannedIds.has(String(expense.id))?
+       <div className="zsl-preflight-status ready"><CheckCircle2 size={16}/> Připravené pro zápis do originálního Excelu</div>:
+       <div className="zsl-preflight-status blocked"><AlertCircle size={16}/> {status.issues.length?status.issues.join('; '):'Sekce ZSL má vyčerpaný počet řádků. V této šabloně není pro další účtenku místo.'}</div>}
+     {status.warnings.map((warn,i)=><p className="zsl-preflight-warning" key={i}>Poznámka: {warn}</p>)}
+   </div>)}
+   </div>
+   {blocked.length>0&&<Message>{blocked.length} výdajů se do Excelu nezapíše, dokud neopravíš uvedené příčiny. Nejde o chybu rozpoznávání částky, ale o chybějící zařazení nebo podklady.</Message>}
+  </div>
+
+  <div className="panel">
    <div className="heading"><h3><ClipboardList size={20}/> Kontrola zápisu před odesláním</h3></div>
    <div className="counts">
-    <div><strong>{proposed.patches.length}</strong><span>Plánované zápisy do buněk</span></div>
+    <div><strong>{valid.length}</strong><span>Plánované výdaje do Excelu</span></div>
     <div><strong>{proposed.skipped.length}</strong><span>Výdaje k doplnění</span></div>
     <div><strong>{exportAudit?.conflicts?.length||0}</strong><span>Obsazené oblasti</span></div>
    </div>
-   <p className="muted">Přesně porovnáváme originální strukturu s místní evidencí. Například vozidlo ZSL zapisujeme do <code>C24/F24/H24</code> a dalších volných řádků; ubytování od řádku 38; ostatní náklady od řádku 47.</p>
+   <p className="muted">Aktuální zdroj: {templateInfo?.variant==='official'?'oficiální ZSL 2025':'vlastní původní šablona'}.
+     {templateInfo?.variant==='official'?
+       <> Tankování ZSL začíná na řádku <strong>26</strong>, ubytování na <strong>40</strong> a ostatní výdaje na <strong>49</strong> (max. 7 řádků). Původní součtové vzorce se zachovají.</>:
+       <> Tankování ZSL začíná na řádku <strong>24</strong>, ubytování na <strong>38</strong> a ostatní výdaje na <strong>47</strong>. Původní součtové vzorce se zachovají.</>}
+   </p>
    {proposed.skipped.length>0&&<div className="zsl-alert-list">
      <strong>Nezařazené nebo neúplné doklady:</strong>
      {proposed.skipped.map((message,i)=><p key={i}><AlertCircle size={14}/>{message}</p>)}
    </div>}
    {exportAudit&&<div className="zsl-audit">
-     <Message type="success">Stažená kopie původního Excelu. Úspěšně doplněno <strong>{exportAudit.changes.length}</strong> buněk; <strong>{exportAudit.conflicts.length}</strong> obsazených oblastí bylo bez přepisu přeskočeno.</Message>
+     <Message type="success">Do originálního Excelu se skutečně zapsalo <strong>{exportAudit.financialReceiptCount||0} z {exportAudit.expectedReceiptCount||0}</strong> výdajů v hodnotě <strong>{currency(exportAudit.financialAmount||0,event.currency)}</strong>. Změněno {exportAudit.changes.length} buněk. Obsazené původní oblasti: {exportAudit.conflicts.length}.</Message>
      {(exportAudit.conflicts||[]).map((v,i)=><Message key={i}>{v}</Message>)}
      {(exportAudit.warnings||[]).map((v,i)=><Message key={'w'+i}>{v}</Message>)}
      <details open={false}><summary>Zobrazit přesně změněné buňky ({exportAudit.changes.length})</summary>
@@ -86,7 +141,7 @@ export default function SettlementPreview({
 
   <div className="panel">
    <div className="heading"><h3><ShieldCheck size={20}/> Co zůstane zachované</h3></div>
-   <p className="muted">Oba listy knihy jízd, předvyplněné údaje o vozidlech, původní stravné, všechny vzorce a pomocné listy. Přepočty stravného a amortizace neodhadujeme. Pokud aplikace nenajde správné volné pole, raději ho nechá prázdné a uvede důvod.</p>
+   <p className="muted">Původní listy knihy jízd a další listy dle zvolené varianty, předvyplněné údaje o vozidlech, původní stravné, všechny vzorce a pomocné listy. Přepočty stravného a amortizace neodhadujeme. Pokud aplikace nenajde správné volné pole, raději ho nechá prázdné a uvede důvod.</p>
    <Message>Šablona, výsledný Excel i PDF mohou obsahovat citlivé osobní a bankovní údaje. ZIP zálohu ukládej mimo aplikaci a soubory neposílej veřejně.</Message>
   </div>
  </div>;

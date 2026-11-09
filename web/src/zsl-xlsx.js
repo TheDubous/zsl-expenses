@@ -182,7 +182,7 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
  const {sheets,book}=await readWorkbook(zip,options);
  const Parser=options.DOMParserCtor||globalThis.DOMParser;
  const Serializer=options.XMLSerializerCtor||globalThis.XMLSerializer;
- const {patches,warnings,skipped}=buildTemplatePatches({event,trainer,riders,expenses,funding});
+ const {patches,warnings,skipped}=buildTemplatePatches({event,trainer,riders,expenses,funding,variant:inspected.variant});
  const grouped=getRowGroup(patches);
  const changes=[],conflicts=[];
  const touched=new Map();
@@ -221,6 +221,20 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
    changes.push({sheet:group.sheet,cell:at,value:patch.value,kind:patch.kind,source:patch.group||'profil/cesta'});
   }
  }
+ // Never return a seemingly valid financial report with only names filled in.
+ // A missing bank proof is a warning; unknown classification is an explicit
+ // blocker visible to the user in the preflight panel.
+ const recordedIds=new Set(changes.map(x=>x.source).filter(x=>String(x).startsWith('receipt:')).map(x=>x.slice(8)));
+ const financialReceiptCount=recordedIds.size;
+ const financialAmount=expenses.filter(x=>recordedIds.has(String(x.id)))
+   .reduce((sum,x)=>sum+Math.round(Number(x.amount||0)*100),0)/100;
+ if(expenses.length>0&&financialReceiptCount===0){
+  const reasons=[...skipped,...conflicts];
+  throw new Error('Excel by neobsahoval žádnou finanční položku, proto se nestáhl. '+
+    (reasons.length?reasons.slice(0,3).join(' | '):
+    'Ve vestavěné šabloně nebyly nalezené vhodné volné buňky.')+
+    ' Otevři Náhled → Kontrola zařazení výdajů.');
+ }
  for(const item of touched.values()){
   const serialized=new Serializer().serializeToString(item.xml);
   zip.file(item.path,serialized);
@@ -240,6 +254,8 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
  zip.file('xl/workbook.xml',new Serializer().serializeToString(book));
  const out=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}});
  return {blob:out,template:inspected,changes,warnings,skipped,conflicts,
+  financialReceiptCount,financialAmount,
+  expectedReceiptCount:expenses.length,
   filename:'ZSL_VYPLNENY_ORIGINAL_'+safeFilename(event?.name||'vyuctovanie')+'.xlsx'};
 }
 export async function downloadFilledOriginal(data,options={}){

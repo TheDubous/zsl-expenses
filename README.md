@@ -1,5 +1,7 @@
 # ZSL Expenses
 
+**v0.8.1:** Opravený finanční export do skutečné ZSL šablony: správné řádky oficiální i vlastní verze, bankovní potvrzení není blokací účetní částky, průběžná kontrola všech účtenek a ochrana proti vytvoření výkazu s nulou zaúčtovaných výdajů. [Návod a kontrolní testy](./web/README.md).
+
 **v0.8:** PWA nyní automaticky používá veřejnou originální šablonu ZSL, která je součástí offline aplikace; bez ručního importu. Druhou možností zůstává vlastní upravený XLSX. OCR lépe vyhledává a zvětšuje úzké světlé účtenky (např. IMG_7834) a kontroluje skutečnou částku. [Vysvětlení rozdílu šablon a návod](./web/README.md).
 
 **Nově v0.7:** import skutečného ZSL XLSX z telefonu, úprava pouze prázdných vstupních buněk při zachování původních 11 listů a vzorců, samostatné PDF účtenek s individuálními bankovními potvrzeními a protokol zapsaných/skipped položek. Oprava OCR: Summe není Ihre Ersparnis. [Návod v aplikaci](./web/README.md).

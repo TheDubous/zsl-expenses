@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 import {DOMParser,XMLSerializer} from '@xmldom/xmldom';
-import {REQUIRED_SHEETS,buildTemplatePatches} from '../src/zsl-template-map.mjs';
+import {REQUIRED_SHEETS,buildTemplatePatches,exportExpenseReadiness,recommendedZslSection} from '../src/zsl-template-map.mjs';
 import {inspectZslXlsx,createFilledXlsx,ensureBundledZslTemplate,getTemplateInfo} from '../src/zsl-xlsx.js';
 import 'fake-indexeddb/auto';
 globalThis.window=globalThis;
@@ -103,10 +103,11 @@ test('preserves populated source cells, formulae and image bytes while shifting 
  assert.match(wb,/fullCalcOnLoad="1"/);
  for(let i=0;i<11;i++)assert.ok(zip.file('xl/worksheets/sheet'+(i+1)+'.xml'));
 });
-test('unsafe card documents are skipped, original existing values are not overwritten',()=>{
+test('bank proof pending does not suppress a verified receipt in original XLSX',()=>{
  const result=buildTemplatePatches({event,trainer,expenses:[{...expense('c',40),payment_method:'card',bank_path:null}],funding:[]});
- assert.equal(result.patches.some(x=>x.group==='receipt:c'),false);
- assert.equal(result.skipped.length,1);
+ assert.equal(result.patches.some(x=>x.group==='receipt:c'),true);
+ assert.equal(result.skipped.length,0);
+ assert.ok(result.warnings.some(x=>x.includes('bankovní potvrzení')));
 });
 
 test('a filled Colere-like source cannot silently mix with a new event',async()=>{
@@ -150,4 +151,70 @@ test('calculated values in a blank official workbook do not look like a previous
  const bytes=await zip.generateAsync({type:'uint8array'});
  const inspected=await inspectZslXlsx(new Blob([bytes]),X);
  assert.equal(inspected.hasExistingTrip,false);
+});
+
+test('card purchase can be written to original XLSX before bank proof arrives',async()=>{
+ const fuel={...expense('gutmann-receipt',127.78),payment_method:'card',bank_path:null,ocr:{reviewed:true}};
+ const prepared=buildTemplatePatches({event,trainer,expenses:[fuel],funding:[]});
+ assert.equal(prepared.skipped.length,0);
+ assert.ok(prepared.warnings.some(x=>/bankovní potvrzení/.test(x)));
+ const file=await syntheticTemplate({variant:'official'});
+ const result=await createFilledXlsx(file,{event,trainer,expenses:[fuel],funding:[]},X);
+ assert.ok(result.changes.some(x=>x.sheet==='s.3 - výdavky'&&x.cell==='H26'&&x.value===127.78));
+ const zip=await JSZip.loadAsync(result.blob);
+ assert.equal(xmlCellValue(cellValue(await zip.file('xl/worksheets/sheet3.xml').async('string'),'H26')),'127.78');
+});
+test('fuel and meal receipts awaiting ZSL category are visible individually in readiness list',()=>{
+ const fuel={...expense('fuel-1',127.78),zsl_section:'',category:'fuel',payment_method:'card',bank_path:null};
+ const food={...expense('food-1',55.84),zsl_section:'',category:'food'};
+ assert.equal(recommendedZslSection(fuel),'unassigned');
+ assert.equal(recommendedZslSection(food),'unassigned');
+ const prepared=buildTemplatePatches({event,trainer,expenses:[fuel,food],funding:[]});
+ assert.equal(prepared.skipped.length,2);
+ assert.ok(prepared.skipped.find(x=>x.includes('vyber typ vozidla')));
+ assert.ok(prepared.skipped.find(x=>x.includes('zahraniční stravování')));
+ const status=exportExpenseReadiness(fuel,event);
+ assert.equal(status.canExport,false);
+ assert.ok(status.warnings.some(x=>x.includes('bankovní potvrzení')));
+});
+test('unreviewed OCR can be exported for checking but is flagged prominently',()=>{
+ const e={...expense('review-later',100),ocr:{reviewed:false},payment_method:'unknown'};
+ const res=buildTemplatePatches({event,trainer,expenses:[e],funding:[]});
+ assert.equal(res.skipped.length,0);
+ assert.ok(res.warnings.some(x=>x.includes('nebyly ručně potvrzené')));
+ assert.ok(res.warnings.some(x=>x.includes('způsob platby')));
+});
+
+test('official template writes into shifted cost rows; custom template keeps original older rows',async()=>{
+ const hotel={id:'hotel1',category:'lodging',merchant:'Hotel SBX',amount:315,payment_method:'cash',receipt_path:'r_hotel'};
+ const lift={id:'lift1',category:'resort',merchant:'Pitztaler',amount:650,payment_method:'card',bank_path:null,receipt_path:'r_lift'};
+ const diesel={id:'diesel1',category:'fuel',zsl_section:'zsl_car',merchant:'Gutmann',amount:127.78,payment_method:'card',bank_path:null,receipt_path:'r_diesel'};
+ const inputs={event,trainer,riders:[],expenses:[hotel,lift,diesel],funding:[]};
+ const official=await createFilledXlsx(await syntheticTemplate({variant:'official'}),inputs,X);
+ assert.equal(official.financialReceiptCount,3);
+ assert.equal(official.financialAmount,1092.78);
+ for(const [ref,value] of [['H26',127.78],['H40',315],['H49',650]])
+  assert.ok(official.changes.some(x=>x.sheet==='s.3 - výdavky'&&x.cell===ref&&x.value===value),'official '+ref);
+ const custom=await createFilledXlsx(await syntheticTemplate({variant:'user-double-log'}),inputs,X);
+ for(const [ref,value] of [['H25',127.78],['H38',315],['H47',650]])
+  assert.ok(custom.changes.some(x=>x.sheet==='s.3 - výdavky'&&x.cell===ref&&x.value===value),'custom '+ref);
+});
+test('official ZSL OTHER section stops before summary formula on row 56',async()=>{
+ const expenses=Array.from({length:8},(_,i)=>({
+  id:'other'+i,category:'resort',merchant:'Skipass '+i,amount:100+i,
+  receipt_path:'r'+i,payment_method:'cash'
+ }));
+ const file=await syntheticTemplate({variant:'official'});
+ const out=await createFilledXlsx(file,{event,trainer,riders:[],expenses,funding:[]},X);
+ assert.equal(out.financialReceiptCount,7);
+ assert.equal(out.skipped.length,1);
+ assert.ok(out.skipped[0].includes('nie sú voľné riadky'));
+ assert.ok(out.changes.some(x=>x.cell==='H55'));
+ assert.ok(!out.changes.some(x=>x.cell==='H56'||x.cell==='H57'));
+});
+test('no valid financial receipt throws rather than downloading an Excel with only names',async()=>{
+ const empty={...expense('unassigned',127.78),zsl_section:'',category:'fuel'};
+ await assert.rejects(async()=>createFilledXlsx(await syntheticTemplate({variant:'official'}),
+  {event,trainer,riders:[{name:'Athlete A'}],expenses:[empty],funding:[]},X),
+  /Excel by neobsahoval žádnou finanční položku/);
 });
