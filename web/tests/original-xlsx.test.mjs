@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 import {DOMParser,XMLSerializer} from '@xmldom/xmldom';
-import {REQUIRED_SHEETS,buildTemplatePatches} from '../src/zsl-template-map.mjs';
+import {REQUIRED_SHEETS,buildTemplatePatches,exportExpenseReadiness,recommendedZslSection} from '../src/zsl-template-map.mjs';
 import {inspectZslXlsx,createFilledXlsx,ensureBundledZslTemplate,getTemplateInfo} from '../src/zsl-xlsx.js';
 import 'fake-indexeddb/auto';
 globalThis.window=globalThis;
@@ -150,4 +150,36 @@ test('calculated values in a blank official workbook do not look like a previous
  const bytes=await zip.generateAsync({type:'uint8array'});
  const inspected=await inspectZslXlsx(new Blob([bytes]),X);
  assert.equal(inspected.hasExistingTrip,false);
+});
+
+test('card purchase can be written to original XLSX before bank proof arrives',async()=>{
+ const fuel={...expense('gutmann-receipt',127.78),payment_method:'card',bank_path:null,ocr:{reviewed:true}};
+ const prepared=buildTemplatePatches({event,trainer,expenses:[fuel],funding:[]});
+ assert.equal(prepared.skipped.length,0);
+ assert.ok(prepared.warnings.some(x=>/bankovní potvrzení/.test(x)));
+ const file=await syntheticTemplate({variant:'official'});
+ const result=await createFilledXlsx(file,{event,trainer,expenses:[fuel],funding:[]},X);
+ assert.ok(result.changes.some(x=>x.sheet==='s.3 - výdavky'&&x.cell==='H25'&&x.value===127.78));
+ const zip=await JSZip.loadAsync(result.blob);
+ assert.equal(xmlCellValue(cellValue(await zip.file('xl/worksheets/sheet3.xml').async('string'),'H25')),'127.78');
+});
+test('fuel and meal receipts awaiting ZSL category are visible individually in readiness list',()=>{
+ const fuel={...expense('fuel-1',127.78),zsl_section:'',category:'fuel',payment_method:'card',bank_path:null};
+ const food={...expense('food-1',55.84),zsl_section:'',category:'food'};
+ assert.equal(recommendedZslSection(fuel),'unassigned');
+ assert.equal(recommendedZslSection(food),'unassigned');
+ const prepared=buildTemplatePatches({event,trainer,expenses:[fuel,food],funding:[]});
+ assert.equal(prepared.skipped.length,2);
+ assert.ok(prepared.skipped.find(x=>x.includes('vyber typ vozidla')));
+ assert.ok(prepared.skipped.find(x=>x.includes('zahraniční stravování')));
+ const status=exportExpenseReadiness(fuel,event);
+ assert.equal(status.canExport,false);
+ assert.ok(status.warnings.some(x=>x.includes('bankovní potvrzení')));
+});
+test('unreviewed OCR can be exported for checking but is flagged prominently',()=>{
+ const e={...expense('review-later',100),ocr:{reviewed:false},payment_method:'unknown'};
+ const res=buildTemplatePatches({event,trainer,expenses:[e],funding:[]});
+ assert.equal(res.skipped.length,0);
+ assert.ok(res.warnings.some(x=>x.includes('nebyly ručně potvrzené')));
+ assert.ok(res.warnings.some(x=>x.includes('způsob platby')));
 });
