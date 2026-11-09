@@ -19,3 +19,9 @@ test('advances minus returns minus expenses', () => {
   assert.equal(t.remaining,890.76);
 });
 test('Czech decimal input',()=>assert.equal(decimal('1 607,86'),1607.86));
+
+test('OCR results require a human confirmation before completion',()=>{
+ const e={receipt_path:'receipt1',merchant:'Slovnaft',amount:132.34,payment_method:'cash',ocr:{confidence:'high',reviewed:false}};
+ assert.equal(expenseStatus(e),'Ověřit načtené údaje');
+ assert.equal(expenseStatus({...e,ocr:{...e.ocr,reviewed:true}}),'Doklady kompletní');
+});
