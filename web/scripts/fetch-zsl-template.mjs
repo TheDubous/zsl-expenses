@@ -22,6 +22,9 @@ if(data.length>3_000_000||data.length<20_000||String.fromCharCode(...data.slice(
 const zip=await JSZip.loadAsync(data,{checkCRC32:true});
 const wb=await zip.file('xl/workbook.xml')?.async('string');
 if(!wb)throw Error('XLSX neobsahuje hlavní workbook.xml');
+const publishedNames=[...wb.matchAll(/<sheet\b[^>]*name="([^"]+)"/g)].map(m=>m[1]);
+console.log('Published sheet names:',JSON.stringify(publishedNames));
+console.log('Published size and SHA256:',data.length,createHash('sha256').update(data).digest('hex'));
 for(const name of SHEETS){
  if(!wb.includes('name="'+name.replace(/&/g,'&amp;')+'"'))
   throw Error('Neplatný oficiální formulář ZSL: chybí list '+name);
