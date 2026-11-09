@@ -12,7 +12,7 @@ export default function SettlementPreview({
 }){
  const [details,setDetails]=useState(false);
  const [allowExisting,setAllowExisting]=useState(false);
- const proposed=buildTemplatePatches({event,trainer,riders,expenses,funding});
+ const proposed=buildTemplatePatches({event,trainer,riders,expenses,funding,variant:templateInfo?.variant});
  const checks=expenses.map(expense=>({expense,...exportExpenseReadiness(expense,event)}));
  const valid=checks.filter(x=>x.canExport);
  const readyTotal=valid.reduce((sum,x)=>sum+Math.round(Number(x.expense.amount||0)*100),0)/100;
@@ -108,7 +108,11 @@ export default function SettlementPreview({
     <div><strong>{proposed.skipped.length}</strong><span>Výdaje k doplnění</span></div>
     <div><strong>{exportAudit?.conflicts?.length||0}</strong><span>Obsazené oblasti</span></div>
    </div>
-   <p className="muted">Přesně porovnáváme originální strukturu s místní evidencí. Například vozidlo ZSL zapisujeme do <code>C24/F24/H24</code> a dalších volných řádků; ubytování od řádku 38; ostatní náklady od řádku 47.</p>
+   <p className="muted">Aktuální zdroj: {templateInfo?.variant==='official'?'oficiální ZSL 2025':'vlastní původní šablona'}.
+     {templateInfo?.variant==='official'?
+       <> Tankování ZSL začíná na řádku <strong>26</strong>, ubytování na <strong>40</strong> a ostatní výdaje na <strong>49</strong> (max. 7 řádků). Původní součtové vzorce se zachovají.</>:
+       <> Tankování ZSL začíná na řádku <strong>24</strong>, ubytování na <strong>38</strong> a ostatní výdaje na <strong>47</strong>. Původní součtové vzorce se zachovají.</>}
+   </p>
    {proposed.skipped.length>0&&<div className="zsl-alert-list">
      <strong>Nezařazené nebo neúplné doklady:</strong>
      {proposed.skipped.map((message,i)=><p key={i}><AlertCircle size={14}/>{message}</p>)}
