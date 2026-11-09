@@ -262,7 +262,7 @@ function App(){
   function Documents(){
     return <div className="stack">
       <div className="panel"><div className="heading"><h3>1. Nahraj účtenky</h3><Camera size={20}/></div>
-        <p className="muted">Nahraj více účtenek najednou, nebo je vyfoť. Fotografie se uloží jen do tohoto telefonu. Údaje zatím doplníš ručně.</p>
+        <p className="muted">Po nahrání fotografií aplikace zkusí <strong>automaticky přečíst částku, obchodníka a datum</strong>. Rozpoznávání probíhá v telefonu; první spuštění OCR potřebuje stáhnout jazyková data přes internet. Všechny načtené hodnoty je nutné zkontrolovat. PDF zatím nemá automatické OCR.</p>
         <div className="upload-row">
           <label className="btn filebtn"><Upload size={17}/> Více účtenek<input type="file" accept="image/*,application/pdf" multiple disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
           <label className="btn secondary filebtn"><Camera size={17}/> Vyfotit<input type="file" accept="image/*" capture="environment" disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
@@ -276,16 +276,17 @@ function App(){
       {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
       {expenses.map(e=><div className="expense" key={e.id}>
         <div className="expense-top"><div><strong>{e.merchant||e.receipt_name||'Doklad'}</strong><small>{showDate(e.spent_on)} · {CATEGORIES.find(c=>c.id===e.category)?.label||'Ostatní'}</small></div><b>{currency(e.amount,active.currency)}</b></div>
-        <div className="expense-bottom"><Status item={e}/><span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
+        <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed} ok={!!e.ocr.reviewed}>{e.ocr.reviewed?'OCR ověřeno':'OCR ke kontrole ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
           <Button small secondary onClick={()=>setEditing(e)}>Upravit</Button>
-          {e.receipt_path&&<Button small secondary onClick={()=>viewDocument(e.receipt_path)}>Účtenka</Button>}
+          {e.receipt_path&&<Button small secondary onClick={()=>viewDocument(e.receipt_path)}>Náhled účtenky</Button>}
+          {e.receipt_path&&!/\.pdf$/i.test(e.receipt_name||'')&&<Button small secondary disabled={busy} onClick={()=>rescanExpense(e)}><ScanLine size={14}/> Přečíst znovu</Button>}
           {e.bank_path?<Button small secondary onClick={()=>viewDocument(e.bank_path)}>Potvrzení</Button>:e.payment_method==='card'&&<label className="btn small filebtn"><Plus size={14}/> Připojit potvrzení<input type="file" accept="application/pdf,image/*" disabled={busy} onChange={ev=>{attachBank(e,ev.target.files[0]);ev.target.value=''}}/></label>}
           <Button small secondary danger onClick={()=>removeExpense(e)}><Trash2 size={14}/></Button>
         </div>
       </div>)}
       <Button onClick={doExport} disabled={busy||expenses.length===0}><FolderArchive size={17}/> ZIP tohoto vyúčtování</Button>
-      <p className="muted smalltext">Obsahuje přílohy jednotlivých výdajů, CSV a přehled chybějících potvrzení. Oficiální Excel ZSL doplníme v další verzi.</p>
+      <p className="muted smalltext">Obsahuje přílohy jednotlivých výdajů, CSV a přehled chybějících potvrzení. V záložce <strong>Náhled</strong> uvidíš, jak budou data uspořádána ve formuláři ZSL. Přímý export do originálního Excelu zatím není hotový.</p>
     </div>;
   }
 
@@ -364,8 +365,8 @@ function App(){
       {events.length===0?<div className="panel start"><MountainSnow size={40}/><h2>Připrav první akci</h2><p>Nejdřív přidej trenéra, pak vytvoř soustředění nebo závody a začni ukládat účtenky.</p><Button onClick={()=>db.trainers.length?setNewEvent(true):setView('people')}>{db.trainers.length?'Vytvořit akci':'Přidat trenéra'}</Button></div>:<div className="event-select">
         <Select label="Aktuální akce" value={active?.id||''} onChange={e=>{setActiveId(e.target.value);setView('overview')}}>{events.map(ev=><option key={ev.id} value={ev.id}>{ev.kind==='Preteky'?'🏁':'🏔️'} {ev.name} – {db.trainers.find(t=>t.id===ev.trainerId)?.name||'Trenér'}</option>)}</Select>
         <span>{active?.kind} · {showDate(active?.startsOn)}{active?.endsOn&&' – '+showDate(active.endsOn)}</span></div>}
-      <div className="tab-nav">{[[ 'overview',Wallet,'Přehled'],['documents',Receipt,'Doklady'],['people',Users,'Lidé'],['backup',HardDrive,'Záloha']].map(([name,Icon,label])=><button key={name} className={view===name?'active':''} onClick={()=>setView(name)}><Icon size={18}/>{label}</button>)}</div>
-      {view==='people'?<People/>:view==='backup'?<Backup/>:active?(view==='overview'?<Dashboard/>:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
+      <div className="tab-nav">{[[ 'overview',Wallet,'Přehled'],['documents',Receipt,'Doklady'],['preview',FileSpreadsheet,'Náhled'],['people',Users,'Lidé'],['backup',HardDrive,'Záloha']].map(([name,Icon,label])=><button key={name} className={view===name?'active':''} onClick={()=>setView(name)}><Icon size={18}/>{label}</button>)}</div>
+      {view==='people'?<People/>:view==='backup'?<Backup/>:active?(view==='overview'?<Dashboard/>:view==='preview'?<SettlementPreview event={active} trainer={trainer} riders={db.riders.filter(r=>(active.riderIds||[]).includes(r.id))} expenses={expenses} funding={funding} onEditEvent={()=>setEditingEvent(true)}/>:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
       <footer>Lokální prototyp · ukládej pravidelné ZIP zálohy · bez cloudové synchronizace</footer>
     </main>
     {newEvent&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setNewEvent(false)}}>
@@ -375,9 +376,30 @@ function App(){
           <Input label="Název" name="name" placeholder="Pitztal SBX" required/>
           <Select label="Trenér" name="trainer">{db.trainers.map(t=><option value={t.id} key={t.id}>{t.name}{t.club?' – '+t.club:''}</option>)}</Select>
           <div className="two-col"><Input label="Začátek" name="start" type="date"/><Input label="Konec" name="end" type="date"/></div>
+          <div className="two-col"><Input label="Miesto konania" name="location" placeholder="Pitztal"/><Input label="Štát" name="country" placeholder="Rakúsko"/></div>
+          <Input label="Účel cesty" name="purpose" placeholder="Tréning SBX / preteky"/>
+          <div className="two-col"><Input label="Miesto odchodu" name="startPlace"/><Input label="Čas odchodu" name="startTime" type="time"/></div>
+          <div className="two-col"><Input label="Miesto návratu" name="endPlace"/><Input label="Čas návratu" name="endTime" type="time"/></div>
+          <Input label="Číslo zálohy (volitelné)" name="advanceNumber"/>
           <div className="two-col"><Input label="Počáteční záloha" name="advance" defaultValue="0" inputMode="decimal" required/><Select label="Měna" name="currency"><option>EUR</option><option>CZK</option><option>CHF</option></Select></div>
           <div className="input-label"><span>Jezdci</span><div className="checks">{db.riders.length===0&&<p className="muted">Jezdce přidej v záložce Lidé.</p>}{db.riders.map(r=><label key={r.id}><input type="checkbox" name="riders" value={r.id}/>{r.name}</label>)}</div></div>
           <Button type="submit" disabled={busy}>Vytvořit soustředění / závody</Button>
+        </form>
+      </div>
+    </div>}
+    {editingEvent&&active&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingEvent(false)}}>
+      <div className="modal"><div className="heading"><h2>Údaje cesty – ZSL</h2><button aria-label="Zavřít" onClick={()=>setEditingEvent(false)}><X size={20}/></button></div>
+        <form key={active.id} onSubmit={saveEventChanges} className="grid-form">
+          <Select label="Typ akce" name="kind" defaultValue={active.kind}><option value="Sústredenie">Sústredenie</option><option value="Preteky">Preteky</option></Select>
+          <Input name="name" label="Název akce" defaultValue={active.name} required/>
+          <Select label="Vyúčtovatel – trenér" name="trainer" defaultValue={active.trainerId}>{db.trainers.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+          <div className="two-col"><Input name="start" type="date" label="Začátek" defaultValue={active.startsOn||''}/><Input name="end" type="date" label="Konec" defaultValue={active.endsOn||''}/></div>
+          <div className="two-col"><Input name="location" label="Miesto konania" defaultValue={active.location||''}/><Input name="country" label="Štát" defaultValue={active.country||''}/></div>
+          <Input name="purpose" label="Účel cesty" defaultValue={active.purpose||''}/>
+          <div className="two-col"><Input name="startPlace" label="Miesto odchodu" defaultValue={active.startPlace||''}/><Input name="startTime" type="time" label="Čas odchodu" defaultValue={active.startTime||''}/></div>
+          <div className="two-col"><Input name="endPlace" label="Miesto návratu" defaultValue={active.endPlace||''}/><Input name="endTime" type="time" label="Čas návratu" defaultValue={active.endTime||''}/></div>
+          <Input name="advanceNumber" label="Číslo zálohy" defaultValue={active.advanceNumber||''}/>
+          <Button disabled={busy} type="submit"><Check size={17}/> Uložit cestovní údaje</Button>
         </form>
       </div>
     </div>}
@@ -389,12 +411,18 @@ function App(){
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
+          {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · důvěra: {editing.ocr.confidence}</strong><p>Zkontroluj částku a potvrď uložení. OCR není účetní ověření.</p>
+            {(editing.ocr.amountCandidates||[]).length>0&&<div className="ocr-candidates">Rozpoznané částky: {editing.ocr.amountCandidates.map(c=><button key={c.amount} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,active?.currency||'EUR')}</button>)}</div>}
+            <details><summary>Zobrazit rozpoznaný text</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
+          </div>}
           <p className="muted smalltext">Bankovní potvrzení můžeš přiložit později v seznamu dokladů. Změna způsobu platby z karty odstraní původní bankovní přílohu.</p>
           <Button type="submit" disabled={busy}><Check size={17}/> Uložit změny</Button>
         </form>
       </div>
     </div>}
-    {busy&&<div className="busy"><RefreshCw className="spin" size={18}/> Ukládám…</div>}
+    {viewingDoc&&<ReceiptViewer id={viewingDoc} onClose={()=>setViewingDoc(null)}/>}
+    {ocrProgress&&<div className="ocr-toast"><ScanLine size={17}/>{ocrProgress}</div>}
+    {busy&&<div className="busy"><RefreshCw className="spin" size={18}/> {ocrProgress?'Čtu účtenky…':'Ukládám…'}</div>}
   </div>;
 }
 createRoot(document.getElementById('root')).render(<App/>);
