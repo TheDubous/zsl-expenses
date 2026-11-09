@@ -214,7 +214,7 @@ test('official ZSL OTHER section stops before summary formula on row 56',async()
 });
 test('no valid financial receipt throws rather than downloading an Excel with only names',async()=>{
  const empty={...expense('unassigned',127.78),zsl_section:'',category:'fuel'};
- await assert.rejects(()=>createFilledXlsx(await syntheticTemplate({variant:'official'}),
+ await assert.rejects(async()=>createFilledXlsx(await syntheticTemplate({variant:'official'}),
   {event,trainer,riders:[{name:'Athlete A'}],expenses:[empty],funding:[]},X),
   /Excel by neobsahoval žádnou finanční položku/);
 });
