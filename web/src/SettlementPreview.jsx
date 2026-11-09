@@ -90,8 +90,8 @@ export default function SettlementPreview({event,trainer,riders=[],expenses=[],f
       <p className="sheet-footnote">Nezadané stravné ani diety nejsou nula. Originální formulář vyžaduje údaje o jídle, času a právně správné sazby, které aplikace ještě nepočítá.</p>
     </div>}
 
-    {sheet==='jazdy'&&<div className="sheet-preview">
-      <div className="sheet-bar">ZSL · KNIHA JÁZD</div><h3>KNIHA JÁZD</h3>
+    {(sheet==='jazdy'||sheet==='jazdy2')&&<div className="sheet-preview">
+      <div className="sheet-bar">ZSL · {sheet==='jazdy'?'s.5 - kniha jázd':'s.5 - kniha jázd_Kufel_2'}</div><h3>KNIHA JÁZD</h3>
       <div className="sheet-section"><h4>Údaje vozidla</h4><div className="sheet-grid">
         <Field label="Obdobie" value={[event?.startsOn,event?.endsOn].filter(Boolean).join(' – ')}/>
         <Field label="Vozidlo" value={NOT_COMPUTED}/>
