@@ -10,6 +10,7 @@ export default function SettlementPreview({
  onEditEvent,onImportTemplate,onDownloadXlsx,onDownloadAttachments,templateInfo,exportAudit,attachmentAudit,busy=false
 }){
  const [details,setDetails]=useState(false);
+ const [allowExisting,setAllowExisting]=useState(false);
  const proposed=buildTemplatePatches({event,trainer,riders,expenses,funding});
  return <div className="stack">
   <div className="panel">
@@ -19,11 +20,17 @@ export default function SettlementPreview({
    <label className={'btn filebtn '+(busy?'disabled':'')}>
     <Upload size={17}/> {templateInfo?'Změnit originální XLSX':'Vybrat originální XLSX ZSL'}
     <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy}
-      onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)onImportTemplate(file)}}/>
+      onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file){setAllowExisting(false);onImportTemplate(file)}}}/>
    </label>
    {templateInfo?<Message type="success"><strong>Načteno:</strong> {templateInfo.name}<br/>
     <small>{REQUIRED_SHEETS.length} očekávaných listů · {(templateInfo.size/1024).toFixed(0)} kB · bez přenosu na server</small></Message>:
     <Message>Originální soubor dosud není vybraný. Bez něj se XLSX nevygeneruje, aby nedošlo k vytvoření další neodpovídající šablony.</Message>}
+   {templateInfo?.hasExistingTrip&&<div className="zsl-existing-trip">
+      <Message><strong>Pozor:</strong> tento Excel obsahuje již vyplněný termín nebo výdaje starší cesty ({templateInfo.existingCount} buněk). Výchozí export je proto zablokovaný, aby se nesmíchala vyúčtování dvou různých akcí. Nejbezpečnější je vybrat čistou původní šablonu.</Message>
+      <label className="zsl-confirm-existing"><input type="checkbox" checked={allowExisting} onChange={e=>setAllowExisting(e.target.checked)}/>
+        <span>Vím, že jde o <strong>stejný rozpracovaný výkaz</strong> a chci do něj pouze přidat nové položky. Žádné původní údaje se nemají přepsat.</span>
+      </label>
+    </div>}
   </div>
 
   <div className="panel">
@@ -33,7 +40,7 @@ export default function SettlementPreview({
       <FileSpreadsheet size={27}/>
       <h4>1. Původní ZSL výkaz (XLSX)</h4>
       <p>Stejný excelový soubor jako originál; pouze doplněné vstupní buňky v příslušných listech. Vzorce se přepočítají po otevření v Excelu.</p>
-      <button className="btn" onClick={onDownloadXlsx} disabled={busy||!templateInfo}><Download size={17}/> Stáhnout vyplněný originál</button>
+      <button className="btn" onClick={()=>onDownloadXlsx(allowExisting)} disabled={busy||!templateInfo||(templateInfo.hasExistingTrip&&!allowExisting)}><Download size={17}/> Stáhnout vyplněný originál</button>
     </div>
     <div className="zsl-download-option">
       <FileText size={27}/>
