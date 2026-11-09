@@ -1,5 +1,7 @@
 # ZSL Expenses
 
+**v0.8:** PWA nyní automaticky používá veřejnou originální šablonu ZSL, která je součástí offline aplikace; bez ručního importu. Druhou možností zůstává vlastní upravený XLSX. OCR lépe vyhledává a zvětšuje úzké světlé účtenky (např. IMG_7834) a kontroluje skutečnou částku. [Vysvětlení rozdílu šablon a návod](./web/README.md).
+
 **Nově v0.7:** import skutečného ZSL XLSX z telefonu, úprava pouze prázdných vstupních buněk při zachování původních 11 listů a vzorců, samostatné PDF účtenek s individuálními bankovními potvrzeními a protokol zapsaných/skipped položek. Oprava OCR: Summe není Ihre Ersparnis. [Návod v aplikaci](./web/README.md).
 
 **v0.6:** Přehled má přesné názvy podle originální ZSL tabulky a umí stáhnout celý kontrolní PDF výkaz (`s.1`, `s.3`, tuzemské a zahraniční stravné, knihu jízd a správu z cesty). PDF neobsahuje fotografie dokladů a nenahrazuje originální XLSX. [Podrobnosti](./web/README.md).
@@ -32,9 +34,9 @@ npm run dev
 ```
 
 ### Důležité
-Aplikace **zatím není veřejně nasazená**. Otevření samotného repozitáře GitHubu nespustí instalovatelnou aplikaci; je potřeba statický HTTPS hosting (například Vercel nebo GitHub Pages, pokud to umožňuje plán GitHubu). Při nasazení hosting uchovává **pouze kód aplikace, nikoliv soukromé účtenky a bankovní dokumenty**.
+Aplikace běží na **https://thedubous.github.io/zsl-expenses/**. Otevření samotného repozitáře GitHubu nespustí instalovatelnou aplikaci; je potřeba statický HTTPS hosting (například Vercel nebo GitHub Pages, pokud to umožňuje plán GitHubu). Při nasazení hosting uchovává **pouze kód aplikace, nikoliv soukromé účtenky a bankovní dokumenty**.
 
-**Data jsou jen v konkrétním telefonu.** Vymazání dat Safari nebo odstranění aplikace je může smazat. Pravidelně vytvářej kompletní zálohu ZIP a ulož ji do Souborů/iCloud Drive. Při prvním testování používej fiktivní doklady. AI OCR a originální ZSL XLSX export zatím nejsou implementované.
+**Data jsou jen v konkrétním telefonu.** Vymazání dat Safari nebo odstranění aplikace je může smazat. Pravidelně vytvářej kompletní zálohu ZIP a ulož ji do Souborů/iCloud Drive. Při prvním testování používej fiktivní doklady. OCR fotografií i doplňování originálního XLSX jsou implementované, ale jejich správnost musí člověk před vyúčtováním zkontrolovat.
 
 ## Starší nativní prototyp: Expo
 Kořenové soubory `App.jsx`, `app.json`, `eas.json` a `package.json` nadále obsahují původní Expo/React Native prototyp. Nejsou nutné pro provoz lokální PWA.
