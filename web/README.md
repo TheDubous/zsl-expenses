@@ -4,7 +4,7 @@
 
 - Na stránce **Přehled** přibyl souhrn **Zúčtovanie oprávnených výdavkov** s přesnými položkami z listu `s.1 - pokyn`: **Cestovné, Ubytovanie, Ostatné, Stravné tuzemsko, Stravné zahraničie, Príspevok na stravu tuzemsko, Príspevok na stravu zahraničie, Výdavok celkom, Doplatok / Preplatok**.
 - Stravné, diety, amortizace a nárokové částky nejsou vypočítány. Označujeme je **NEVYPOČÍTANÉ**, místo abychom tvrdili, že jsou nulové nebo schválené.
-- Záložka **Náhled** teď zobrazuje názvy a pracovní obsah šesti částí originální šablony: `s.1 - pokyn`, `s.3 - výdavky`, tuzemské a zahraniční stravné z `s.4`, `s.5 - kniha jázd` a `s.6 - správa`.
+- Záložka **Náhled** teď zobrazuje názvy a pracovní obsah sedmi viditelných listů originální šablony: `s.1 - pokyn`, `s.3 - výdavky`, tuzemské a zahraniční stravné z `s.4`, `s.5 - kniha jázd` a `s.6 - správa`.
 - Tlačítko **Stáhnout PDF celého výkazu** v Přehledu i Náhledu sestaví **vícestránkový PDF kontrolní výkaz** přímo v telefonu, včetně profilu trenéra/IBAN, účastníků, všech zaevidovaných výdajů, záloh, oddílů ZSL a kontrolního seznamu. PDF má výrazné označení, že **nejde o originální XLSX ZSL ani o schválený cestovní příkaz**.
 - U každého výdaje můžeš nyní vybrat **přesnou sekci listu s.3 – výdavky**. U paliva zvol, zda patří pod soukromé vozidlo, vozidlo právnické osoby nebo vozidlo ZSL, a můžeš doplnit značku a EČV. **Aplikace vlastníka vozidla nikdy automaticky nehádá.**
 - V editoru akce jde doplnit také **SPRÁVA Z PRACOVNEJ CESTY**, která se projeví v PDF.
