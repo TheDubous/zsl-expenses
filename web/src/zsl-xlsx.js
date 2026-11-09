@@ -53,7 +53,29 @@ export async function inspectZslXlsx(blob,options={}){
  const {sheets}=await readWorkbook(zip,options);
  const missing=REQUIRED_SHEETS.filter(name=>!sheets.has(name));
  if(missing.length)throw new Error('Soubor neodpovídá původnímu formuláři ZSL. Chybí listy: '+missing.join(', '));
- return {sheets:[...sheets.keys()],size:blob.size};
+ // A completed example workbook can contain old financial entries. Do not silently
+ // mix them with a NEW event. Vehicle samples in the car log are not treated as
+ // expenses, so those may be safely retained.
+ const financialCells={
+  's.1 - pokyn':['B12','J12'],
+  's.3 - výdavky':[
+    ...Array.from({length:3},(_,i)=>'I'+(i+6)),
+    ...Array.from({length:10},(_,i)=>'H'+(i+24)),
+    ...Array.from({length:5},(_,i)=>'H'+(i+38)),
+    ...Array.from({length:13},(_,i)=>'H'+(i+47))
+  ],
+  's.4 - stravné zahr.':Array.from({length:34},(_,i)=>'J'+(i+74))
+ };
+ const existing=[];
+ for(const [sheet,refs] of Object.entries(financialCells)){
+  const doc=parseXml(await zip.file(sheets.get(sheet)).async('string'),options.DOMParserCtor);
+  const data=descendants(doc,'sheetData')[0];
+  for(const ref of refs){
+   const cell=sourceCell(data,ref);
+   if(cell&&occupied(cell))existing.push(sheet+'!'+ref);
+  }
+ }
+ return {sheets:[...sheets.keys()],size:blob.size,existing,hasExistingTrip:existing.length>0};
 }
 export async function storeOriginalTemplate(file,options={}){
  if(!file||!/\.xlsx$/i.test(file.name))throw new Error('Vyber originální soubor ZSL ve formátu XLSX.');
@@ -62,13 +84,15 @@ export async function storeOriginalTemplate(file,options={}){
   id:TEMPLATE_ID,kind:'template',name:file.name,
   type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   blob:new Blob([await file.arrayBuffer()],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),
-  createdAt:new Date().toISOString()
+  createdAt:new Date().toISOString(),
+  hasExistingTrip:inspected.hasExistingTrip,existingCount:inspected.existing.length
  });
  return {...inspected,filename:file.name};
 }
 export async function getTemplateInfo(){
  const doc=await getOne('documents',TEMPLATE_ID);
- return doc?{name:doc.name,createdAt:doc.createdAt,size:doc.blob?.size||0}:null;
+ return doc?{name:doc.name,createdAt:doc.createdAt,size:doc.blob?.size||0,
+  hasExistingTrip:!!doc.hasExistingTrip,existingCount:doc.existingCount||0}:null;
 }
 function sourceCell(sheetData,ref){
  for(const row of Array.from(sheetData.childNodes||[])){
@@ -118,6 +142,9 @@ function getRowGroup(patches){
 }
 export async function createFilledXlsx(blob,{event,trainer,riders,expenses,funding},options={}){
  const inspected=await inspectZslXlsx(blob,options);
+ if(inspected.hasExistingTrip&&!options.allowExisting){
+  throw new Error('Vybraný XLSX už obsahuje termíny nebo výdaje předchozí cesty ('+inspected.existing.length+' polí). Aby se částky různých akcí nesmíchaly, zvol čistou šablonu ZSL. Pokud chceš vědomě DOPLNIT stejný rozpracovaný výkaz, potvrď to v záložce Náhled.');
+ }
  const zip=await JSZip.loadAsync(blob,{checkCRC32:true});
  const {sheets,book}=await readWorkbook(zip,options);
  const Parser=options.DOMParserCtor||globalThis.DOMParser;
