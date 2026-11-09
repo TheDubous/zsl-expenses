@@ -245,7 +245,7 @@ function App(){
     const dough=parts.length?'conic-gradient('+parts.join(',')+')':'conic-gradient(#374760 0% 100%)';
     return <div className="stack">
       <div className="stats">
-        <div className="metric"><span>Suma zálohy v EUR / přijaté zálohy</span><strong>{currency(summary.deposit,active.currency)}</strong></div>
+        <div className="metric"><span>Prijaté zálohy (evidované)</span><strong>{currency(summary.deposit,active.currency)}</strong></div>
         <div className="metric"><span>Výdavok celkom (evidované)</span><strong>{currency(summary.spent,active.currency)}</strong></div>
         <div className={'metric main '+(summary.remaining<0?'negative':'')}><span>Doplatok / Preplatok (orientačne)</span><strong>{currency(summary.remaining,active.currency)}</strong></div>
       </div>
