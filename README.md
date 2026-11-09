@@ -1,5 +1,7 @@
 # ZSL Expenses
 
+**Nově v0.7:** import skutečného ZSL XLSX z telefonu, úprava pouze prázdných vstupních buněk při zachování původních 11 listů a vzorců, samostatné PDF účtenek s individuálními bankovními potvrzeními a protokol zapsaných/skipped položek. Oprava OCR: Summe není Ihre Ersparnis. [Návod v aplikaci](./web/README.md).
+
 **v0.6:** Přehled má přesné názvy podle originální ZSL tabulky a umí stáhnout celý kontrolní PDF výkaz (`s.1`, `s.3`, tuzemské a zahraniční stravné, knihu jízd a správu z cesty). PDF neobsahuje fotografie dokladů a nenahrazuje originální XLSX. [Podrobnosti](./web/README.md).
 
 ## Aktualizace v0.4
