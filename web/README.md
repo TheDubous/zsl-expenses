@@ -1,5 +1,15 @@
 # ZSL Expenses · Lokální PWA (bez databázového serveru)
 
+## Novinky v0.4: náhled formuláře, lokální OCR a soupiska
+
+- **Náhled → s.1 – Pokyn / s.3 – Výdavky / Kontrola**: mobilní pracovní náhled polí původního ZSL formuláře. Ukazuje, co je vyplněné a chybí. **Zatím nejde o skutečné úpravy či export originálního XLSX.** ZIP nadále obsahuje CSV a fotografické doklady.
+- **Trenéři**: jméno, titul, funkce, oddělení ZSL, trvalá adresa, telefon, e-mail, IBAN, volitelně BIC a banka. Staré uložené profily lze doplnit a nebudou smazané.
+- **Sústredenie / Preteky**: můžeš kdykoliv upravit datum, čas, místo odchodu a návratu, destinaci/stát, účel a číslo zálohy.
+- **OCR přímo v telefonu (Tesseract.js)**: po nahrání fotografie se pokusí navrhnout částku, datum, obchodníka, kategorii a způsob platby. Jazykový model a pracovní moduly OCR se **při prvním použití stahují z CDN**, proto první OCR vyžaduje internet; pozdější offline OCR na iPhonu není garantováno. Fotografie se kvůli OCR neodesílají na server. Rozpoznané hodnoty vždy ručně zkontroluj – mohou být nepřesné.
+- OCR zatím funguje pro **fotografie**, ne pro PDF. U dříve nahrané fotografie použij **Přečíst znovu**. Fotografie a PDF mají vlastní **Náhled dokladu**.
+- **Aktuální soupiska**: jezdce lze přidat i odebrat po vytvoření akce, historie změn se zachová. Globální **Archivovat** skryje jezdce z nových akcí, starší evidence zůstává.
+- Lokální IndexedDB se **nevytváří znovu** – v0.4 používá stejné tabulky a soubory jako v0.3. Přesto je vhodné vytvořit úplnou ZIP zálohu před aktualizací a po ní.
+
 **Aktuální doporučená varianta.** PWA pro iPhone, Android i počítač. Účtenky, bankovní potvrzení, profily, jezdci a finanční záznamy ukládá **přímo do IndexedDB v tomto zařízení**. Nepotřebuje Supabase, login ani vlastní server. V kořeni repozitáře zůstává starší Expo verze.
 
 ## Co již funguje
