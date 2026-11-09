@@ -28,3 +28,18 @@ test('unrecognized supplier yields alternatives instead of pretending certainty'
  const x=parseReceiptText('KASSENBON\nZAHLUNG\nBERGHAUS SONNE GmbH\n03.11.2026\nSUMME 28,90 EUR');
  assert.ok(x.merchantCandidates.some(z=>/berghaus sonne/i.test(z.name)));
 });
+
+test('German SUMME outranks Ihre Ersparnis immediately below it',()=>{
+ const x=parseReceiptText('SPAR SUPERMARKT\nSUMME: 87,43 EUR\nIhre Ersparnis: 12,50 EUR\nKartenzahlung');
+ assert.equal(x.amount,87.43);
+ assert.ok(!x.amountCandidates.some(x=>x.amount===12.5));
+});
+test('sum and savings may each span two lines',()=>{
+ const x=parseReceiptText('KASSENBON\nSumme\n79,90 EUR\nIhre Ersparnis\n25,10 EUR');
+ assert.equal(x.amount,79.9);
+ assert.ok(!x.amountCandidates.some(x=>x.amount===25.1));
+});
+test('only savings amount is not silently interpreted as spent',()=>{
+ const x=parseReceiptText('Ihre Ersparnis 17,30 EUR');
+ assert.equal(x.amount,null);
+});
