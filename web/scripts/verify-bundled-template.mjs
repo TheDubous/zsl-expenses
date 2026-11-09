@@ -5,7 +5,7 @@ const bytes=await readFile('web/public/ZSL-Cestovny-prikaz.xlsx');
 const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 const xml={DOMParserCtor:DOMParser,XMLSerializerCtor:XMLSerializer};
 const info=await inspectZslXlsx(blob,xml);
-console.log('Official template:',JSON.stringify({variant:info.variant,sheets:info.sheets.length,hasExistingTrip:info.hasExistingTrip,existing:info.existing.length}));
+console.log('Official template:',JSON.stringify({variant:info.variant,sheets:info.sheets.length,hasExistingTrip:info.hasExistingTrip,existing:info.existing.length,existingCells:info.existing}));
 if(info.variant!=='official'||info.sheets.length!==11)
  throw new Error('Downloaded template is not the approved 11-sheet official version.');
 const data={
