@@ -33,6 +33,7 @@ function App(){
   const [newEvent,setNewEvent]=useState(false);
   const [editing,setEditing]=useState(null);
   const [editingTrainer,setEditingTrainer]=useState(null);
+  const [editingRider,setEditingRider]=useState(null);
   const [editingEvent,setEditingEvent]=useState(false);
   const [viewingDoc,setViewingDoc]=useState(null);
   const [ocrProgress,setOcrProgress]=useState('');
@@ -98,9 +99,17 @@ function App(){
     e.preventDefault();if(!active)return;
     const f=new FormData(e.currentTarget),next=f.getAll('riders');
     await run(async()=>{
-      await putOne('events',applyRosterChange(active,next));
+      await putOne('events',applyRosterChange(active,next,new Date().toISOString(),String(f.get('rosterReason')||'').trim()));
       setNotice('Soupiska byla aktualizována; odjezdy a návraty jsou uložené v historii.');
     });
+  }
+  async function renameRider(e){
+    e.preventDefault();
+    if(!editingRider)return;
+    const form=e.currentTarget,name=String(new FormData(form).get('riderName')||'').trim();
+    if(!name){setError('Jméno jezdce nesmí být prázdné.');return}
+    if(db.riders.some(r=>r.id!==editingRider.id&&r.name.toLowerCase()===name.toLowerCase())){setError('Jezdec s tímto jménem už je uložený.');return}
+    await run(async()=>{await putOne('riders',{...editingRider,name});setEditingRider(null);setNotice('Jméno jezdce upraveno ve všech soustředěních a závodech.');});
   }
   async function toggleRiderActive(rider){
     await run(async()=>{
@@ -311,9 +320,10 @@ function App(){
         {db.riders.length===0?<p className="muted">Zatím nemáš uložené žádné jezdce.</p>:<div className="rider-manager">
           {[...db.riders].sort((a,b)=>Number(!!a.inactive)-Number(!!b.inactive)||a.name.localeCompare(b.name)).map(r=><div className="rider-row" key={r.id}>
             <div><strong>{r.name}</strong><span>{r.inactive?'Archivovaný':'Aktivní'}</span></div>
-            <Button small secondary onClick={()=>toggleRiderActive(r)}>{r.inactive?<><UserCheck size={15}/> Vrátit</>:<><UserX size={15}/> Archivovat</>}</Button>
+            <div className="rider-actions"><Button small secondary onClick={()=>setEditingRider(r)}>Upravit</Button><Button small secondary onClick={()=>toggleRiderActive(r)}>{r.inactive?<><UserCheck size={15}/> Vrátit</>:<><UserX size={15}/> Archivovat</>}</Button></div>
           </div>)}
         </div>}
+        {editingRider&&<form className="form-row" key={editingRider.id} onSubmit={renameRider}><Input label="Upravit jméno jezdce" name="riderName" defaultValue={editingRider.name} required/><Button type="submit" disabled={busy}>Uložit jméno</Button><Button secondary onClick={()=>setEditingRider(null)}>Zrušit</Button></form>}
       </div>
       {active&&<div className="panel"><div className="heading"><h3>Účastníci aktuální akce</h3><Users size={20}/></div>
         <p className="muted">Změň soupisku i po zahájení akce. Když někdo odjede nebo nepřijede, odškrtni ho a ulož. Jeho profil ani starší doklady nezmizí.</p>
@@ -322,10 +332,10 @@ function App(){
             <label key={r.id}><input type="checkbox" name="riders" value={r.id} defaultChecked={(active.riderIds||[]).includes(r.id)}/>{r.name}{r.inactive&&' (archivovaný)'}</label>)}
             {db.riders.length===0&&<p className="muted">Nejdřív přidej jezdce.</p>}
           </div>
-          <Button type="submit" disabled={busy}>Uložit aktuální soupisku</Button>
+          <Input label="Důvod změny soupisky (volitelné)" name="rosterReason" placeholder="Nemoc, odjezd, změna nominace…"/><Button type="submit" disabled={busy}>Uložit aktuální soupisku</Button>
         </form>
         {(active.rosterChanges||[]).length>0&&<details className="roster-history"><summary>Historie změn soupisky ({active.rosterChanges.length})</summary>
-          <div>{[...active.rosterChanges].reverse().map((x,i)=><p key={i}><strong>{db.riders.find(r=>r.id===x.riderId)?.name||'Jezdec'}</strong> · {x.action==='joined'?'přidán':'vyřazen'} · {new Date(x.at).toLocaleString('cs-CZ')}</p>)}</div>
+          <div>{[...active.rosterChanges].reverse().map((x,i)=><p key={i}><strong>{db.riders.find(r=>r.id===x.riderId)?.name||'Jezdec'}</strong> · {x.action==='joined'?'přidán':'vyřazen'} · {new Date(x.at).toLocaleString('cs-CZ')}{x.reason&&' · '+x.reason}</p>)}</div>
         </details>}
       </div>}
     </div>;
