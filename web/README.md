@@ -1,5 +1,16 @@
 # ZSL Expenses · Lokální PWA (bez databázového serveru)
 
+## Vylepšení OCR v0.5 – důkladné čtení účtenek
+
+Novým výchozím nastavením je **Důkladné rozpoznávání**. Jedna fotka se čte postupně vícekrát pomocí různých nastavení obrazu a OCR segmentace. Samostatný průchod horní částí účtenky se zaměřuje na **dodavatele**; když je nejasná částka, může přibýt další průchod spodní částí. Rychlý režim zůstává dostupný v rozbalovacím výběru na záložce **Doklady**.
+
+- OCR používá jeden pracovní proces, rozpoznávání angličtiny a němčiny (pokud se jejich modely načtou), předzpracování kontrastu a více průchodů. Na slabším telefonu může být důkladné čtení znatelně pomalejší; nemusí zvýšit úspěšnost u každé fotografie.
+- U starších účtenek použij **Přečíst znovu**. Původní fotografie a ručně potvrzené údaje zůstanou zachované; nové návrhy najdeš v **Upravit**.
+- Detail dokladu nyní nabízí **možné dodavatele** a alternativní částky. Klepnutím na návrh vyplníš pole, ale správnost je stále nutné ověřit na originální fotografii.
+- Pokud se jednotlivé průchody neshodnou na částce či obchodníkovi, aplikace výsledek označí jako nejistý místo automatického rozhodnutí.
+- Pro OCR fotografií první spuštění vyžaduje internet ke stažení jazykových modelů. Fotografie jsou analyzované místně v telefonu. PDF OCR stále nepodporujeme.
+- **Před aktualizací doporučujeme Kompletní zálohu ZIP.** Tato verze zachovává stejné IndexedDB úložiště a nevyžaduje jeho výmaz.
+
 ## Novinky v0.4: náhled formuláře, lokální OCR a soupiska
 
 - **Náhled → s.1 – Pokyn / s.3 – Výdavky / Kontrola**: mobilní pracovní náhled polí původního ZSL formuláře. Ukazuje, co je vyplněné a chybí. **Zatím nejde o skutečné úpravy či export originálního XLSX.** ZIP nadále obsahuje CSV a fotografické doklady.
