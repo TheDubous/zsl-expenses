@@ -7,7 +7,7 @@ function Message({children,type='warning'}){
 }
 export default function SettlementPreview({
  event,trainer,riders=[],expenses=[],funding=[],
- onEditEvent,onImportTemplate,onDownloadXlsx,onDownloadAttachments,templateInfo,exportAudit,attachmentAudit,busy=false
+ onEditEvent,onImportTemplate,onDownloadXlsx,onDownloadAttachments,onLoadBuiltIn,templateInfo,exportAudit,attachmentAudit,busy=false
 }){
  const [details,setDetails]=useState(false);
  const [allowExisting,setAllowExisting]=useState(false);
@@ -15,16 +15,18 @@ export default function SettlementPreview({
  return <div className="stack">
   <div className="panel">
    <div className="heading"><h3><FileSpreadsheet size={20}/> Originální soubor ZSL – Excel</h3></div>
-   <Message type="success"><strong>Nevytváříme novou podobu cestovního příkazu.</strong> Použijeme skutečný XLSX, který sem vybereš. Všechny jeho listy, formátování, vzorce i předvyplněné hodnoty zůstanou zachované; doplňujeme jen ověřená prázdná pole do kopie souboru.</Message>
-   <p className="muted">Šablonu vyber z aplikace <strong>Soubory</strong> na iPhonu. Ukládá se pouze do tohoto telefonu, nikoli na GitHub. Můžeš použít i již částečně vyplněný ZSL Excel – obsazená pole nepřepisujeme.</p>
+   <Message type="success"><strong>Šablona je součástí aplikace.</strong> Ve výchozím nastavení se do telefonu automaticky uloží skutečný, veřejně vydaný formulář ZSL. Bez ručního nahrávání. Při exportu se upraví pouze jeho kopie; původní vzorce, rozložení a další listy se zachovají.</Message>
+   <p className="muted">Oficiální šablona ZSL má list <strong>s.2 – súhlas MV</strong>. Tvoje dříve nahraná varianta má místo něj druhou knihu jízd. Základní buňky pro vyúčtování jsou společné. Pokud potřebuješ přesně svou upravenou variantu, můžeš ji i nadále vybrat ručně.</p>
    <label className={'btn filebtn '+(busy?'disabled':'')}>
-    <Upload size={17}/> {templateInfo?'Změnit originální XLSX':'Vybrat originální XLSX ZSL'}
+    <Upload size={17}/> {templateInfo?'Použít vlastní upravený XLSX':'Vybrat vlastní XLSX (volitelné)'}
     <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy}
       onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file){setAllowExisting(false);onImportTemplate(file)}}}/>
    </label>
-   {templateInfo?<Message type="success"><strong>Načteno:</strong> {templateInfo.name}<br/>
-    <small>{REQUIRED_SHEETS.length} očekávaných listů · {(templateInfo.size/1024).toFixed(0)} kB · bez přenosu na server</small></Message>:
-    <Message>Originální soubor dosud není vybraný. Bez něj se XLSX nevygeneruje, aby nedošlo k vytvoření další neodpovídající šablony.</Message>}
+   {templateInfo?<Message type="success"><strong>{templateInfo.source==='official-bundled'?'Výchozí šablona připravena':'Vlastní šablona připravena'}:</strong> {templateInfo.name}
+      <small>{templateInfo.variant==='official'?'Oficiální verze ZSL (s.2 – súhlas MV)':templateInfo.variant==='user-double-log'?'Upravená verze se dvěma knihami jízd':'Individuální verze'} · {(templateInfo.size/1024).toFixed(0)} kB · uložená v telefonu</small></Message>:
+    <div><Message>Vestavěná šablona zatím není dostupná v tomto telefonu. Při prvním spuštění musí být na chvíli dostupný internet.</Message>
+      <button className="btn secondary" type="button" disabled={busy} onClick={onLoadBuiltIn}>Načíst vestavěnou šablonu ZSL</button>
+    </div>}
    {templateInfo?.hasExistingTrip&&<div className="zsl-existing-trip">
       <Message><strong>Pozor:</strong> tento Excel obsahuje již vyplněný termín nebo výdaje starší cesty ({templateInfo.existingCount} buněk). Výchozí export je proto zablokovaný, aby se nesmíchala vyúčtování dvou různých akcí. Nejbezpečnější je vybrat čistou původní šablonu.</Message>
       <label className="zsl-confirm-existing"><input type="checkbox" checked={allowExisting} onChange={e=>setAllowExisting(e.target.checked)}/>
