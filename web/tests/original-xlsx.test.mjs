@@ -138,3 +138,16 @@ test('official published variant with s.2 vehicle consent is supported without a
  const again=await ensureBundledZslTemplate({fetchFn:()=>{throw Error('should not fetch again')}});
  assert.equal(again.source,'official-bundled');
 });
+
+test('calculated values in a blank official workbook do not look like a previous trip',async()=>{
+ const original=await syntheticTemplate({variant:'official'});
+ const zip=await JSZip.loadAsync(original);
+ const s3path='xl/worksheets/sheet3.xml';
+ const xml=await zip.file(s3path).async('string');
+ const withFormula=xml.replace('<c r="H38" s="3"></c>','<c r="H38" s="3"><f>F38</f><v>0</v></c>');
+ assert.notEqual(withFormula,xml);
+ zip.file(s3path,withFormula);
+ const bytes=await zip.generateAsync({type:'uint8array'});
+ const inspected=await inspectZslXlsx(new Blob([bytes]),X);
+ assert.equal(inspected.hasExistingTrip,false);
+});
