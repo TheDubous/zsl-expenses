@@ -1,5 +1,7 @@
 # ZSL Expenses
 
+**v0.6:** Přehled má přesné názvy podle originální ZSL tabulky a umí stáhnout celý kontrolní PDF výkaz (`s.1`, `s.3`, tuzemské a zahraniční stravné, knihu jízd a správu z cesty). PDF neobsahuje fotografie dokladů a nenahrazuje originální XLSX. [Podrobnosti](./web/README.md).
+
 ## Aktualizace v0.4
 Lokální PWA teď obsahuje **náhled připravovaných dat pro originální Excel ZSL** (`s.1 – pokyn`, `s.3 – výdavky`), bohatší profil trenéra (včetně adresy, telefonu a IBAN), úpravy soupisky a archivaci jezdců. Fotografie účtenek se nově pokouší číst pomocí OCR v telefonu; zjištěné částky je nutné ručně potvrdit. Dříve nahrané doklady lze znovu analyzovat. Podrobný popis a omezení: [web/README.md](./web/README.md).
 
