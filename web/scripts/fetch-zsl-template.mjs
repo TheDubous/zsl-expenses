@@ -8,8 +8,8 @@ import JSZip from 'jszip';
 const SOURCE='https://www.zvazslovenskeholyzovania.sk/wp-content/uploads/ZSL-Cestovny-prikaz-sablona-v20250430.xlsx';
 const DEST=path.resolve('web/public/ZSL-Cestovny-prikaz.xlsx');
 const SHEETS=[
- 's.1 - pokyn','s.3 - výdavky','s.4 - stravné tuzem.','s.4 - stravné zahr.',
- 's.5 - kniha jázd','s.5 - kniha jázd_Kufel_2','s.6 - správa',
+ 's.1 - pokyn','s.2 - súhlas MV','s.3 - výdavky','s.4 - stravné tuzem.','s.4 - stravné zahr.',
+ 's.5 - kniha jázd','s.6 - správa',
  'Náhrady INT 2021','pomocný hárok','DIÉTY SLOVENSKO','str.4 - stravné INT'
 ];
 const response=await fetch(SOURCE,{redirect:'follow',signal:AbortSignal.timeout(30000)});
@@ -19,6 +19,9 @@ if(sizeHeader>3_000_000)throw Error('Oficiální šablona je nečekaně velká.'
 const data=new Uint8Array(await response.arrayBuffer());
 if(data.length>3_000_000||data.length<20_000||String.fromCharCode(...data.slice(0,2))!=='PK')
  throw Error('Zdroj nevrací očekávaný soubor XLSX.');
+const sha=createHash('sha256').update(data).digest('hex');
+const approvedFingerprint='867e8590986a82578c2d2c9d84a080aaa8b9edcd24993e3c2b3dbc6ff3fa9800';
+if(sha!==approvedFingerprint)throw Error('Oficiální šablona ZSL se změnila; nový soubor je nutné zkontrolovat před distribucí.');
 const zip=await JSZip.loadAsync(data,{checkCRC32:true});
 const wb=await zip.file('xl/workbook.xml')?.async('string');
 if(!wb)throw Error('XLSX neobsahuje hlavní workbook.xml');
@@ -33,6 +36,5 @@ if(!zip.file('xl/worksheets/sheet1.xml')||!zip.file('xl/worksheets/sheet3.xml'))
  throw Error('Oficiální šablona nemá požadovanou strukturu pracovních listů.');
 await mkdir(path.dirname(DEST),{recursive:true});
 await writeFile(DEST,data);
-const sha=createHash('sha256').update(data).digest('hex');
 console.log('Official ZSL template verified:',data.length,'bytes; SHA256:',sha,'; 11 expected sheets');
 console.log('Bundled at:',DEST);
