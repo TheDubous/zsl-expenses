@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import {buildTemplatePatches,REQUIRED_SHEETS,TEMPLATE_ID} from './zsl-template-map.mjs';
+import {buildTemplatePatches,REQUIRED_SHEETS,VARIANT_SHEETS,TEMPLATE_ID} from './zsl-template-map.mjs';
 import {getOne,putOne} from './localdb.js';
 import {downloadBlob} from './archive.js';
 import {safeFilename} from './utils.mjs';
@@ -75,7 +75,10 @@ export async function inspectZslXlsx(blob,options={}){
    if(cell&&occupied(cell))existing.push(sheet+'!'+ref);
   }
  }
- return {sheets:[...sheets.keys()],size:blob.size,existing,hasExistingTrip:existing.length>0};
+ const names=[...sheets.keys()];
+ const variant=names.includes('s.2 - súhlas MV')?'official':
+   names.includes('s.5 - kniha jázd_Kufel_2')?'user-double-log':'unknown';
+ return {sheets:names,size:blob.size,variant,existing,hasExistingTrip:existing.length>0};
 }
 export async function storeOriginalTemplate(file,options={}){
  if(!file||!/\.xlsx$/i.test(file.name))throw new Error('Vyber originální soubor ZSL ve formátu XLSX.');
@@ -85,14 +88,44 @@ export async function storeOriginalTemplate(file,options={}){
   type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   blob:new Blob([await file.arrayBuffer()],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),
   createdAt:new Date().toISOString(),
-  hasExistingTrip:inspected.hasExistingTrip,existingCount:inspected.existing.length
+  hasExistingTrip:inspected.hasExistingTrip,existingCount:inspected.existing.length,
+  variant:inspected.variant,source:'user'
  });
  return {...inspected,filename:file.name};
 }
 export async function getTemplateInfo(){
  const doc=await getOne('documents',TEMPLATE_ID);
  return doc?{name:doc.name,createdAt:doc.createdAt,size:doc.blob?.size||0,
-  hasExistingTrip:!!doc.hasExistingTrip,existingCount:doc.existingCount||0}:null;
+  hasExistingTrip:!!doc.hasExistingTrip,existingCount:doc.existingCount||0,
+  source:doc.source||'user',variant:doc.variant||'unknown'}:null;
+}
+// The PWA ships a vetted PUBLIC template. Do not overwrite a user-selected
+// private workbook already saved in IndexedDB. A first successful load is stored
+// locally, enabling the original workbook export without an upload dialog.
+let defaultTemplatePromise=null;
+export async function ensureBundledZslTemplate({fetchFn=globalThis.fetch,basePath=import.meta.env?.BASE_URL||'/',options={}}={}){
+ const existing=await getOne('documents',TEMPLATE_ID);
+ if(existing?.blob)return getTemplateInfo();
+ if(defaultTemplatePromise)return defaultTemplatePromise;
+ defaultTemplatePromise=(async()=>{
+   const normalized=basePath.endsWith('/')?basePath:basePath+'/';
+   const response=await fetchFn(normalized+'ZSL-Cestovny-prikaz.xlsx',{cache:'force-cache'});
+   if(!response?.ok)throw new Error('Vestavěná ZSL šablona není dostupná: HTTP '+response?.status);
+   const blob=await response.blob();
+   const checked=await inspectZslXlsx(blob,options);
+   if(checked.variant!=='official')
+     throw new Error('Neplatná verze vestavěné šablony ZSL: chybí oficiální s.2 – súhlas MV.');
+   const current=await getOne('documents',TEMPLATE_ID);
+   if(current?.blob)return getTemplateInfo();
+   await putOne('documents',{
+     id:TEMPLATE_ID,kind:'template',name:'ZSL-Cestovny-prikaz-sablona-v20250430.xlsx',
+     type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+     blob,createdAt:new Date().toISOString(),source:'official-bundled',variant:'official',
+     hasExistingTrip:checked.hasExistingTrip,existingCount:checked.existing.length
+   });
+   return getTemplateInfo();
+ })().finally(()=>{defaultTemplatePromise=null});
+ return defaultTemplatePromise;
 }
 function sourceCell(sheetData,ref){
  for(const row of Array.from(sheetData.childNodes||[])){
