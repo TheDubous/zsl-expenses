@@ -245,11 +245,11 @@ function App(){
       setNotice('Originální ZSL XLSX byl uložen pouze do tohoto telefonu: '+info.filename+'. Původní data ani vzorce nepřepisujeme.');
     });
   }
-  async function downloadOriginalWorkbook(){
+  async function downloadOriginalWorkbook(allowExisting=false){
     if(!active||busy)return;
     await run(async()=>{
-      const result=await downloadFilledOriginal({event:active,trainer,riders:reportRiders,expenses,funding});
-      setExportAudit(result);
+      const result=await downloadFilledOriginal({event:active,trainer,riders:reportRiders,expenses,funding},{allowExisting});
+      const {blob,...audit}=result;setExportAudit(audit);
       setNotice('Stažena kopie původního XLSX: '+result.changes.length+' buněk doplněno, '+result.conflicts.length+' kolizí, '+result.skipped.length+' nezařazených/neúplných účtenek.');
     });
   }
@@ -257,7 +257,7 @@ function App(){
     if(!active||busy)return;
     await run(async()=>{
       const result=await downloadAttachmentsPdf({event:active,expenses});
-      setAttachmentAudit(result);
+      const {blob,...audit}=result;setAttachmentAudit(audit);
       setNotice('Staženo samostatné PDF s účtenkami a bankovními potvrzeními: '+result.pages+' stran, '+result.warnings.length+' upozornění.');
     });
   }
@@ -288,7 +288,7 @@ function App(){
         {zslReport?.sections.find(x=>x.id==='unassigned')?.expenses.length>0&&
           <p className="zsl-warning">Tankovanie: {zslReport.sections.find(x=>x.id==='unassigned').expenses.length} dokladov potrebuje určiť typ vozidla v s.3 - výdavky.</p>}
         <div className="report-actions">
-          <Button disabled={busy||!templateInfo} onClick={downloadOriginalWorkbook}><FileSpreadsheet size={17}/> Stáhnout vyplněný původní XLSX</Button>
+          <Button disabled={busy||!templateInfo||templateInfo.hasExistingTrip} onClick={()=>downloadOriginalWorkbook(false)}><FileSpreadsheet size={17}/> Stáhnout vyplněný původní XLSX</Button>
           <Button disabled={busy||expenses.length===0} secondary onClick={downloadProofsPdf}><Download size={17}/> Stáhnout přílohy PDF</Button>
           <Button secondary onClick={()=>setView('preview')}>Nastavení originální šablony</Button>
         </div>
