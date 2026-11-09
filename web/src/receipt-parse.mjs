@@ -108,8 +108,12 @@ function merchantSuggestions(lines){
     if(line.split(/\s+/).length>=2)score+=2;
     suggestions.push({name:line,score,source:'header-text'});
   }
+  // INTERSPAR contains SPAR; avoid presenting them as two competing shops.
+  const specificKnown=suggestions.filter(v=>v.source==='known-brand');
+  const filtered=suggestions.filter(v=>!(v.source==='known-brand'&&specificKnown.some(other=>
+    other.name!==v.name&&compactText(other.name).includes(compactText(v.name))&&compactText(other.name).length>compactText(v.name).length)));
   const unique=new Map();
-  for(const v of suggestions){
+  for(const v of filtered){
     const key=compactText(v.name);
     if(!key)continue;
     const prev=unique.get(key);
