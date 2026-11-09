@@ -76,3 +76,6 @@
  .ocr-mode-picker{padding:11px}
  .ocr-candidates button{font-size:12px;max-width:100%;white-space:normal;text-align:left}
 }
+
+.receipt-edit-image{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 11px;background:#24314b;border-radius:11px}
+.receipt-edit-image .muted{font-size:12px}
