@@ -5,6 +5,7 @@ import {DOMParser,XMLSerializer} from '@xmldom/xmldom';
 import {REQUIRED_SHEETS,buildTemplatePatches} from '../src/zsl-template-map.mjs';
 import {inspectZslXlsx,createFilledXlsx,ensureBundledZslTemplate,getTemplateInfo} from '../src/zsl-xlsx.js';
 import 'fake-indexeddb/auto';
+globalThis.window=globalThis;
 
 const X={DOMParserCtor:DOMParser,XMLSerializerCtor:XMLSerializer};
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
