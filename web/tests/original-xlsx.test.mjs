@@ -181,7 +181,7 @@ test('unreviewed OCR can be exported for checking but is flagged prominently',()
  const e={...expense('review-later',100),ocr:{reviewed:false},payment_method:'unknown'};
  const res=buildTemplatePatches({event,trainer,expenses:[e],funding:[]});
  assert.equal(res.skipped.length,0);
- assert.ok(res.warnings.some(x=>x.includes('nebyly ručně potvrzené')));
+ assert.ok(res.warnings.some(x=>x.includes('nízká jistota OCR')));
  assert.ok(res.warnings.some(x=>x.includes('způsob platby')));
 });
 
