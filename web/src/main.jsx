@@ -532,7 +532,7 @@ function App(){
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
           <Select label="Zaradenie výdavku do originálu ZSL (nutné pro export)" name="zslSection" defaultValue={editing.zsl_section||'auto'}>
-            <option value="auto">Automaticky podľa kategórie (palivo zostane nezařadené)</option>
+            <option value="auto">Automaticky podle kategorie a typu auta nastaveného pro akci</option>
             {ZSL_EXPENSE_SECTIONS.filter(section=>section.id!=='unassigned').map(section=><option key={section.id} value={section.id}>{section.label}</option>)}
             <option value="foreign_meal">s.4 - stravné zahr. – pokladničný doklad zo strav. zariadenia</option>
             <option value="domestic_meal">s.4 - stravné tuzem. – zatím vyžaduje ručné doplnenie</option>
