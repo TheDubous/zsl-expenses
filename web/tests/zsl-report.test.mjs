@@ -35,8 +35,8 @@ test('fuel is not assigned to ZSL-owned vehicle unless selected',()=>{
  assert.equal(expenseSection(expenses[0]),'unassigned');
  assert.equal(expenseSection({...expenses[0],zsl_section:'zsl_car'}),'zsl_car');
  const r=makeZslReport({event,trainer,expenses, funding:[]});
- assert.equal(r.sections.find(x=>x.id==='unassigned').expenses.length,3);
- assert.ok(r.missing.some(x=>/Typ vozidla/.test(x)));
+ assert.equal(r.sections.find(x=>x.id==='unassigned').expenses.length,4);
+ assert.ok(r.missing.some(x=>/Zařazení paliva nebo stravy/.test(x)));
 });
 test('missing receipts and unverified card payments are listed in report',()=>{
  const r=makeZslReport({event,trainer,expenses:[{...expenses[0],bank_path:null}],funding:[]});
