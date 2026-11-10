@@ -13,22 +13,26 @@ const timeValue=s=>/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(s||''))?(Number(s.s
 const t=(sheet,cell,value)=>value==null||String(value).trim()===''?null:{sheet,cell,value:String(value),kind:'text'};
 const n=(sheet,cell,value)=>value==null||!Number.isFinite(Number(value))?null:{sheet,cell,value:Number(value),kind:'number'};
 const S1='s.1 - pokyn',S3='s.3 - výdavky',S4='s.4 - stravné zahr.',S6='s.6 - správa';
-export function recommendedZslSection(expense){
+export function recommendedZslSection(expense,event){
   // Ownership of a vehicle and eligibility of a meal allowance cannot be
   // deduced solely from OCR; these items require a one-time human selection.
   if(expense.zsl_section)return expense.zsl_section;
-  if(expense.category==='fuel'||expense.category==='food')return 'unassigned';
+  if(expense.category==='fuel'){
+    return ['zsl_car','private_car','company_car'].includes(event?.defaultFuelSection)
+      ?event.defaultFuelSection:'unassigned';
+  }
+  if(expense.category==='food')return 'unassigned';
   if(expense.category==='lodging')return 'lodging';
   if(expense.category==='travel')return 'transport';
   return 'other'; // Resort fees, parking and other actual receipts.
 }
 export function exportExpenseReadiness(expense,event){
-  const issues=[],warnings=[],section=recommendedZslSection(expense);
+  const issues=[],warnings=[],section=recommendedZslSection(expense,event);
   const name=expense.merchant||expense.receipt_name||'Neznámá účtenka';
   if(!expense.receipt_path)issues.push('chybí fotografie nebo PDF účtenky');
   if(!(Number(expense.amount)>0))issues.push('chybí ověřená částka');
   if(!String(expense.merchant||'').trim())issues.push('chybí dodavatel');
-  if(expense.ocr?.reviewed===false)warnings.push('automaticky rozpoznané údaje zatím nebyly ručně potvrzené');
+  if(expense.ocr?.reviewed===false&&!expense.ocr?.autoReady)warnings.push('nízká jistota OCR – zkontroluj rozpoznanou částku nebo dodavatele');
   if(expense.payment_method==='card'&&!expense.bank_path)
     warnings.push('bankovní potvrzení zatím chybí – částka přesto patří do evidence; potvrzení přilož před odevzdáním');
   if(!['cash','card'].includes(expense.payment_method))
@@ -107,7 +111,7 @@ export function buildTemplatePatches({event,trainer,riders=[],expenses=[],fundin
   const amount=rounded(e.amount),cells=[];
   if(section==='transport')cells.push(t(S3,'C'+row,name),t(S3,'D'+row,e.note||'Iná miestna doprava'),n(S3,'I'+row,amount));
   else if(section==='zsl_car'){
-   const info=[e.vehicleDetails||'',name,dateText(e.spent_on)].filter(Boolean).join(' – ');
+   const info=[e.vehicleDetails||event?.vehicleDetails||'',name,dateText(e.spent_on)].filter(Boolean).join(' – ');
    cells.push(t(S3,'C'+row,info),n(S3,'F'+row,amount),n(S3,'H'+row,amount));
   }else if(section==='lodging'||section==='other'){
    cells.push(t(S3,'C'+row,e.note?name+' – '+e.note:name),n(S3,'F'+row,amount),n(S3,'H'+row,amount));
