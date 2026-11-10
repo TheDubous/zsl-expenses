@@ -8,7 +8,7 @@ const sheets=[['s.1 - pokyn',1],['s.3 - výdavky',3],['s.4 - stravné tuzem.',4]
 for(const [name,idx] of sheets){
  const text=await zip.file('xl/worksheets/sheet'+idx+'.xml').async('string');
  const xml=new DOMParser().parseFromString(text,'application/xml');
- const formulas=[...xml.getElementsByTagNameNS(ns,'c')].flatMap(c=>{
+ const formulas=Array.from(xml.getElementsByTagNameNS(ns,'c')).flatMap(c=>{
   const f=c.getElementsByTagNameNS(ns,'f')[0],v=c.getElementsByTagNameNS(ns,'v')[0];
   if(!f)return [];
   return [{cell:c.getAttribute('r'),formula:f.textContent,value:v?.textContent??null,type:c.getAttribute('t')||'n'}];
