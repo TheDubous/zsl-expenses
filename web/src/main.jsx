@@ -309,7 +309,7 @@ function App(){
           </div>)}
         </div>
         {zslReport?.sections.find(x=>x.id==='unassigned')?.expenses.length>0&&
-          <p className="zsl-warning">Tankovanie: {zslReport.sections.find(x=>x.id==='unassigned').expenses.length} dokladov potrebuje určiť typ vozidla v s.3 - výdavky.</p>}
+          <p className="zsl-warning">Nezařazené výdaje: {zslReport.sections.find(x=>x.id==='unassigned').expenses.length} účtenek vyžaduje zvolit sekci ZSL (palivo/strava).</p>}
         {expenses.length>0&&<p className="zsl-warning">
           Do původního XLSX je nyní připraveno {expenses.filter(e=>exportExpenseReadiness(e,active).canExport).length} z {expenses.length} výdajů.
           {expenses.some(e=>!exportExpenseReadiness(e,active).canExport)&&' Otevři Náhled, kde lze chybějící zařazení opravit u každé účtenky.'}
