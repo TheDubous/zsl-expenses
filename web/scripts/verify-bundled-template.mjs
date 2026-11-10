@@ -44,6 +44,34 @@ console.log('Write into actual official template:',JSON.stringify({changed:resul
 const amountChanges=result.changes.filter(x=>x.source?.startsWith('receipt:')&&x.kind==='number');
 console.log('Financial verification:',JSON.stringify({financialReceiptCount:result.financialReceiptCount,financialAmount:result.financialAmount,numberCells:amountChanges.map(x=>x.sheet+'!'+x.cell+'='+x.value)}));
 if(result.financialReceiptCount!==4||Math.abs(result.financialAmount-1148.62)>0.001)throw Error('Actual ZSL workbook did not receive four verified receipts totaling 1148.62 EUR.');
+if(!result.formulaCache||result.formulaCache.updated<4)throw Error('Source ZSL workbook formula caches were not refreshed for Quick Look.');
+const values=(await JSZip.loadAsync(result.blob));
+const xmlNs='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const contentAt=async (sheetFile,cell)=>{
+ const doc=new DOMParser().parseFromString(await values.file('xl/worksheets/'+sheetFile).async('string'),'application/xml');
+ const c=Array.from(doc.getElementsByTagNameNS(xmlNs,'c')).find(x=>x.getAttribute('r')===cell);
+ if(!c)throw Error('Missing original output cell '+cell);
+ return {value:c.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent||'',
+   formula:c.getElementsByTagNameNS(xmlNs,'f')[0]?.textContent||''};
+};
+for(const [file,cell,expected,expectedFormula] of [
+ ['sheet3.xml','H3',127.78,'I11+I17+I23+I36'],
+ ['sheet3.xml','H38',315,'H45'],
+ ['sheet3.xml','H47',650,'H56'],
+ ['sheet1.xml','I32',127.78,"SUM('s.3 - výdavky'!H3:I3)"],
+ ['sheet1.xml','I33',315,"SUM('s.3 - výdavky'!H38:I38)"],
+ ['sheet1.xml','I34',650,"SUM('s.3 - výdavky'!H47:I47)"],
+ ['sheet5.xml','L74',55.84,'J74/K74']
+]){
+ const actual=await contentAt(file,cell);
+ if(Math.abs(Number(actual.value)-expected)>0.0001||actual.formula!==expectedFormula)
+  throw Error('Formula or cached result missing: '+file+'!'+cell+' '+JSON.stringify(actual)+' expected '+expected);
+}
+const dateCell=await contentAt('sheet1.xml','B12');
+if(Math.abs(Number(dateCell.value)-46335)>30||!Number.isFinite(Number(dateCell.value)))
+ throw Error('Original trip departure date was not stored as Excel serial number.');
+console.log('Formula-cache audit passed:',JSON.stringify({cached:result.formulaCache.updated,unsupported:result.formulaCache.unsupported}));
+
 for(const [sheet,cell,value] of [
  ['s.3 - výdavky','H26',127.78],
  ['s.3 - výdavky','H40',315],
