@@ -17,6 +17,8 @@ export const ZSL_EXPENSE_SECTIONS=[
   {id:'zsl_car',label:'Motorové vozidlo ZSL',short:'Motorové vozidlo ZSL'},
   {id:'lodging',label:'Náhrada preukázaných výdavkov za ubytovanie',short:'Ubytovanie'},
   {id:'other',label:'INÉ vedľajšie výdavky (mýto, parkovné, skipassy, prenájom infraštruktúry..)',short:'INÉ vedľajšie výdavky'},
+  {id:'foreign_meal',label:'s.4 - stravné zahr. – Pokladničné doklady zo stravovacích zariadení',short:'Príspevok na stravu zahraničie'},
+  {id:'domestic_meal',label:'s.4 - stravné tuzem. – stravné a príspevky na stravu',short:'Strava tuzemsko'},
   {id:'unassigned',label:'NEZARADENÉ - určite typ vozidla alebo druh výdavku',short:'Nezaradené (vyžaduje kontrolu)'}
 ];
 export const ZSL_SETTLEMENT_ROWS=[
@@ -38,6 +40,7 @@ export function expenseSection(expense,event){
   if(ZSL_EXPENSE_SECTIONS.some(x=>x.id===expense.zsl_section))return expense.zsl_section;
   if(expense.category==='fuel')
     return ['zsl_car','private_car','company_car'].includes(event?.defaultFuelSection)?event.defaultFuelSection:'unassigned';
+  if(expense.category==='food')return 'unassigned';
   if(expense.category==='lodging')return 'lodging';
   if(expense.category==='travel')return 'transport';
   return 'other';
