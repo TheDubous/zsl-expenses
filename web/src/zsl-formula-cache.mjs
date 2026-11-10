@@ -85,10 +85,11 @@ export function refreshFormulaCaches(xmlBySheet,{targets}={}){
    if(take('-')){const v=primary();return v===null?null:-v}
    if(take('(')){const value=expression();if(!take(')'))return null;return value}
    const tail=text.slice(pos);
-   const fn=tail.match(/^(SUM)\s*\(/i);
+   const fn=tail.match(/^(SUM|MIN|MAX)\s*\(/i);
    if(fn){
     pos+=fn[0].length;
     let total=0;
+    const argumentsList=[];
     if(take(')'))return 0;
     while(pos<text.length){
      whitespace();
@@ -98,8 +99,9 @@ export function refreshFormulaCaches(xmlBySheet,{targets}={}){
       if(take(':')){const second=ref(first.sheet);if(!second)return null;value=range(first,second)}
       else{pos=before;value=expression()}
      }else value=expression();
-     if(value===null)return null;total+=value;
-     if(take(')'))return total;
+     if(value===null)return null;total+=value;argumentsList.push(value);
+     if(take(')'))return fn[1].toUpperCase()==='MIN'?Math.min(...argumentsList):
+       fn[1].toUpperCase()==='MAX'?Math.max(...argumentsList):total;
      if(!take(',')&&!take(';'))return null;
     }
     return null;
@@ -153,5 +155,5 @@ export function refreshFormulaCaches(xmlBySheet,{targets}={}){
 export const CORE_ZSL_FORMULA_CELLS=[
  ...['H3','I11','I17','I23','I36','H38','H45','H47','H56'].map(cell=>({sheet:'s.3 - výdavky',cell})),
  ...['I32','I33','I34','I35','I36','I37','I38','I39','I40'].map(cell=>({sheet:'s.1 - pokyn',cell})),
- ...['H110','I110','H111','I111'].map(cell=>({sheet:'s.4 - stravné zahr.',cell}))
+ ...['L108','H110','I110','H111','I111'].map(cell=>({sheet:'s.4 - stravné zahr.',cell}))
 ];
