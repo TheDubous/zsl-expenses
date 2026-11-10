@@ -27,7 +27,7 @@ if(info.variant!=='official'||info.sheets.length!==11)
 const data={
  event:{name:'SANDBOX',kind:'Sústredenie',startsOn:'2026-11-09',endsOn:'2026-11-10',
   startPlace:'Test',location:'Test',country:'AUT',purpose:'SBX',currency:'EUR'},
- trainer:{name:'TEST TRAINER',address:'Test',contact:'000000',iban:'SK0000000000000000000000'},
+ trainer:{name:'TEST TRAINER',role:'Trener',department:'Sekcia modernych disciplin',address:'Test',contact:'000000',iban:'SK0000000000000000000000'},
  riders:[],funding:[],expenses:[
   {id:'fuel-1',category:'fuel',zsl_section:'zsl_car',merchant:'Gutmann GmbH',amount:127.78,
    receipt_path:'receipt1',spent_on:'2026-11-09',payment_method:'card',bank_path:null,ocr:{reviewed:true}},
@@ -71,6 +71,26 @@ const dateCell=await contentAt('sheet1.xml','B12');
 if(Math.abs(Number(dateCell.value)-46335)>30||!Number.isFinite(Number(dateCell.value)))
  throw Error('Original trip departure date was not stored as Excel serial number.');
 console.log('Formula-cache audit passed:',JSON.stringify({cached:result.formulaCache.updated,unsupported:result.formulaCache.unsupported}));
+if(!result.integrity||result.integrity.preservedFormulas<50||result.integrity.preservedStyles<500)
+ throw Error('ZSL original formula or style integrity audit failed: '+JSON.stringify(result.integrity));
+const department=await contentAt('sheet1.xml','G6');
+if(!department.value&&!(await values.file('xl/worksheets/sheet1.xml').async('string')).includes('Sekcia modernych disciplin'))
+ throw Error('Trainer department not recorded in original G6 cell');
+const twoMeals={...data,expenses:[...data.expenses,
+ {id:'food-2',category:'food',zsl_section:'foreign_meal',merchant:'Guesthouse',amount:20,
+  receipt_path:'receipt5',spent_on:'2026-11-09',payment_method:'cash',ocr:{autoReady:true,reviewed:false}}]};
+const twice=await createFilledXlsx(blob,twoMeals,{...xml,allowExisting:true});
+if(twice.financialReceiptCount!==5||Math.abs(twice.financialAmount-1168.62)>0.001)
+ throw Error('Second foreign meal was not included in original ZSL costs.');
+const twoZip=await JSZip.loadAsync(twice.blob);
+const mealDoc=new DOMParser().parseFromString(await twoZip.file('xl/worksheets/sheet5.xml').async('string'),'application/xml');
+const cellAt=ref=>Array.from(mealDoc.getElementsByTagNameNS(xmlNs,'c')).find(c=>c.getAttribute('r')===ref);
+const l75=cellAt('L75');
+if(l75?.getElementsByTagNameNS(xmlNs,'f')[0]?.textContent!=='J75/K75'||
+   Math.abs(Number(l75?.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent)-20)>0.001)
+ throw Error('Second food receipt must have a preserved/calculated EUR formula L75 = J75/K75');
+console.log('Second foreign meal formula and original ZSL integrity checks passed.');
+
 
 for(const [sheet,cell,value] of [
  ['s.3 - výdavky','H26',127.78],
