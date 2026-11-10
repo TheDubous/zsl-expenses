@@ -16,6 +16,9 @@ import './style.css';
 
 const initial={trainers:[],riders:[],events:[],funding:[],expenses:[]};
 const today=()=>new Date().toISOString().slice(0,10);
+const autoOCRReady=found=>found?.confidence==='high'&&found?.merchantConfidence==='high'&&
+  Number(found.amount)>0&&!!String(found.merchant||'').trim()&&/^\d{4}-\d{2}-\d{2}$/.test(found.spent_on||'');
+
 const showDate=(date)=>date?new Date(date+'T12:00:00').toLocaleDateString('cs-CZ'):'—';
 function Button({children,onClick,secondary=false,disabled=false,danger=false,small=false,type='button'}){
   return <button type={type} disabled={disabled} onClick={onClick} className={'btn '+(secondary?'secondary ':'')+(danger?'danger ':'')+(small?'small':'')}>{children}</button>
@@ -104,7 +107,9 @@ function App(){
     if(f.get('start')&&f.get('end')&&f.get('end')<f.get('start')){setError('Datum konce nemůže být před začátkem.');return}
     await run(async()=>{
       const idEvent=uid();
-      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),advanceNumber:String(f.get('advanceNumber')||''),reportText:String(f.get('reportText')||''),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
+      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
+        defaultFuelSection:String(f.get('defaultFuelSection')||'unassigned'),
+        vehicleDetails:String(f.get('vehicleDetails')||'').trim(),startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),advanceNumber:String(f.get('advanceNumber')||''),reportText:String(f.get('reportText')||''),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
       if(advance>0)await putOne('funding',{id:uid(),eventId:idEvent,kind:'advance',amount:advance,occurredOn:today(),note:'Počáteční záloha',createdAt:new Date().toISOString()});
       setActiveId(idEvent);setNewEvent(false);setView('overview');setNotice('Akce byla vytvořena a uložena do telefonu.');
     })
@@ -142,6 +147,8 @@ function App(){
         startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),
         endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),
         location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
+        defaultFuelSection:String(f.get('defaultFuelSection')||'unassigned'),
+        vehicleDetails:String(f.get('vehicleDetails')||'').trim(),
         advanceNumber:String(f.get('advanceNumber')||''),reportText:String(f.get('reportText')||'')
       });
       setEditingEvent(false);setNotice('Údaje cesty byly aktualizované.');
@@ -177,7 +184,7 @@ function App(){
                 spent_on:found.spent_on||expense.spent_on,
                 category:found.category||expense.category,
                 payment_method:found.payment_method||'unknown',
-                ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+                ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,autoReady:autoOCRReady(found),scannedAt:new Date().toISOString()}
               };
               await saveExpense(candidate);scanned++;
             }catch(ocrError){failed++;}
@@ -186,7 +193,7 @@ function App(){
         finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('');}
       }
       setView('documents');
-      setNotice('Uloženo '+uploaded.length+' účtenek. Automaticky předvyplněno '+scanned+'.'+(failed?' U '+failed+' fotografií je potřeba ruční kontrola.':'')+' Navržené údaje otevři přes Upravit a potvrď.');
+      setNotice('Uloženo '+uploaded.length+' účtenek. Automaticky předvyplněno '+scanned+'.'+(failed?' U '+failed+' fotografií je potřeba ruční kontrola.':'')+' Údaje s vysokou jistotou OCR jsou uložené automaticky; položky s nízkou jistotou můžeš opravit přes Upravit.');
     });
   }
   async function rescanExpense(expense){
@@ -206,9 +213,9 @@ function App(){
           spent_on:found.spent_on||expense.spent_on,
           category:expense.category==='other'?found.category:expense.category,
           payment_method:expense.payment_method==='unknown'?found.payment_method:expense.payment_method,
-          ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,scannedAt:new Date().toISOString()}
+          ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,autoReady:autoOCRReady(found),scannedAt:new Date().toISOString()}
         });
-        setNotice('OCR dokončeno. Zkontroluj navržené údaje v detailu výdaje.');
+        setNotice('OCR dokončeno. Vysoce jisté údaje se uloží automaticky. Při nejasnosti otevři detail výdaje.');
       }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
     });
   }
@@ -266,7 +273,7 @@ function App(){
     await run(async()=>{
       const result=await downloadFilledOriginal({event:active,trainer,riders:reportRiders,expenses,funding},{allowExisting});
       const {blob,...audit}=result;setExportAudit(audit);
-      setNotice('Původní XLSX stažen: '+result.financialReceiptCount+' z '+result.expectedReceiptCount+' výdajů, částka '+currency(result.financialAmount,active.currency)+'. Nezapsané položky: '+result.skipped.length+'; konflikty: '+result.conflicts.length+'.');
+      setNotice('Vyplněný původní XLSX stažen: '+result.financialReceiptCount+' z '+result.expectedReceiptCount+' výdajů ('+currency(result.financialAmount,active.currency)+'). Zachováno '+result.integrity.preservedFormulas+' vzorců. Otevři v Microsoft Excelu pro úplný přepočet.');
     });
   }
   async function downloadProofsPdf(){
@@ -302,7 +309,7 @@ function App(){
           </div>)}
         </div>
         {zslReport?.sections.find(x=>x.id==='unassigned')?.expenses.length>0&&
-          <p className="zsl-warning">Tankovanie: {zslReport.sections.find(x=>x.id==='unassigned').expenses.length} dokladov potrebuje určiť typ vozidla v s.3 - výdavky.</p>}
+          <p className="zsl-warning">Nezařazené výdaje: {zslReport.sections.find(x=>x.id==='unassigned').expenses.length} účtenek vyžaduje zvolit sekci ZSL (palivo/strava).</p>}
         {expenses.length>0&&<p className="zsl-warning">
           Do původního XLSX je nyní připraveno {expenses.filter(e=>exportExpenseReadiness(e,active).canExport).length} z {expenses.length} výdajů.
           {expenses.some(e=>!exportExpenseReadiness(e,active).canExport)&&' Otevři Náhled, kde lze chybějící zařazení opravit u každé účtenky.'}
@@ -363,7 +370,7 @@ function App(){
       {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
       {expenses.map(e=><div className="expense" key={e.id}>
         <div className="expense-top"><div><strong>{e.merchant||e.receipt_name||'Doklad'}</strong><small>{showDate(e.spent_on)} · {CATEGORIES.find(c=>c.id===e.category)?.label||'Ostatní'}</small></div><b>{currency(e.amount,active.currency)}</b></div>
-        <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed} ok={!!e.ocr.reviewed}>{e.ocr.reviewed?'OCR ověřeno':'OCR ke kontrole ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
+        <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed&&!e.ocr.autoReady} ok={!!e.ocr.reviewed||!!e.ocr.autoReady}>{e.ocr.reviewed?'Ručně upraveno':e.ocr.autoReady?'Automaticky načteno':'Zkontrolovat OCR ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
           <Button small secondary onClick={()=>setEditing(e)}>Upravit</Button>
           {e.receipt_path&&<Button small secondary onClick={()=>viewDocument(e.receipt_path)}>Náhled účtenky</Button>}
@@ -461,7 +468,7 @@ function App(){
         templateInfo={templateInfo} exportAudit={exportAudit} attachmentAudit={attachmentAudit} busy={busy} onLoadBuiltIn={loadDefaultTemplate}
         onSetExpenseSection={selectExpenseSection} onEditExpense={expense=>setEditing(expense)}
       />:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
-      <footer>Lokální prototyp · ukládej pravidelné ZIP zálohy · bez cloudové synchronizace</footer>
+      <footer>ZSL Expenses · lokální aplikace trenéra · soubory zůstávají v telefonu · pravidelně zálohuj ZIP</footer>
     </main>
     {newEvent&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setNewEvent(false)}}>
       <div className="modal"><div className="heading"><h2>Nové vyúčtování</h2><button aria-label="Zavřít" onClick={()=>setNewEvent(false)}><X size={20}/></button></div>
@@ -474,6 +481,13 @@ function App(){
           <Input label="Účel cesty" name="purpose" placeholder="Tréning SBX / preteky"/>
           <div className="two-col"><Input label="Miesto odchodu" name="startPlace"/><Input label="Čas odchodu" name="startTime" type="time"/></div>
           <div className="two-col"><Input label="Miesto návratu" name="endPlace"/><Input label="Čas návratu" name="endTime" type="time"/></div>
+          <Select label="Typ auta pro tankování (nastavit jednou)" name="defaultFuelSection">
+            <option value="unassigned">Vyberu podle konkrétní účtenky</option>
+            <option value="zsl_car">Motorové vozidlo ZSL</option>
+            <option value="private_car">Súkromné vozidlo – potřeba km a spotřeba</option>
+            <option value="company_car">Vozidlo právnickej osoby – potřeba km a spotřeba</option>
+          </Select>
+          <Input label="Značka vozidla a EČV (volitelné)" name="vehicleDetails" placeholder="Renault Trafic · AA-619RJ"/>
           <Input label="Číslo zálohy (volitelné)" name="advanceNumber"/>
           <label className="input-label"><span>SPRÁVA Z PRACOVNEJ CESTY (volitelné)</span><textarea name="reportText" rows="4" placeholder="Shrnutí průběhu soustředění nebo závodů…"/></label>
           <div className="two-col"><Input label="Počáteční záloha" name="advance" defaultValue="0" inputMode="decimal" required/><Select label="Měna" name="currency"><option>EUR</option><option>CZK</option><option>CHF</option></Select></div>
@@ -493,6 +507,13 @@ function App(){
           <Input name="purpose" label="Účel cesty" defaultValue={active.purpose||''}/>
           <div className="two-col"><Input name="startPlace" label="Miesto odchodu" defaultValue={active.startPlace||''}/><Input name="startTime" type="time" label="Čas odchodu" defaultValue={active.startTime||''}/></div>
           <div className="two-col"><Input name="endPlace" label="Miesto návratu" defaultValue={active.endPlace||''}/><Input name="endTime" type="time" label="Čas návratu" defaultValue={active.endTime||''}/></div>
+          <Select label="Typ auta pro tankování – výchozí pro tuto cestu" name="defaultFuelSection" defaultValue={active.defaultFuelSection||'unassigned'}>
+            <option value="unassigned">Určím u každé účtenky</option>
+            <option value="zsl_car">Motorové vozidlo ZSL</option>
+            <option value="private_car">Súkromné vozidlo (vyžaduje km a spotřebu)</option>
+            <option value="company_car">Vozidlo právnickej osoby (vyžaduje km a spotřebu)</option>
+          </Select>
+          <Input name="vehicleDetails" label="Značka vozidla a EČV" defaultValue={active.vehicleDetails||''}/>
           <Input name="advanceNumber" label="Číslo zálohy" defaultValue={active.advanceNumber||''}/>
           <label className="input-label"><span>SPRÁVA Z PRACOVNEJ CESTY (s.6 - správa)</span><textarea name="reportText" rows="5" defaultValue={active.reportText||''} placeholder="Průběh, trénink, závody, výsledky a zhodnocení cesty…"/></label>
           <Button disabled={busy} type="submit"><Check size={17}/> Uložit cestovní údaje</Button>
@@ -511,7 +532,7 @@ function App(){
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
           <Select label="Zaradenie výdavku do originálu ZSL (nutné pro export)" name="zslSection" defaultValue={editing.zsl_section||'auto'}>
-            <option value="auto">Automaticky podľa kategórie (palivo zostane nezařadené)</option>
+            <option value="auto">Automaticky podle kategorie a typu auta nastaveného pro akci</option>
             {ZSL_EXPENSE_SECTIONS.filter(section=>section.id!=='unassigned').map(section=><option key={section.id} value={section.id}>{section.label}</option>)}
             <option value="foreign_meal">s.4 - stravné zahr. – pokladničný doklad zo strav. zariadenia</option>
             <option value="domestic_meal">s.4 - stravné tuzem. – zatím vyžaduje ručné doplnenie</option>
@@ -520,7 +541,7 @@ function App(){
           <Input label="Továrenská značka vozidla, EČV vozidla (pokud se týká paliva)" name="vehicleDetails" defaultValue={editing.vehicleDetails||''} placeholder="Např. Renault Trafic / AA-619RJ"/>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
           {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>{editing.ocr.receiptCropDetected&&<p className="muted smalltext">Úzká účtenka byla před čtením automaticky izolována a zvětšena.</p>}
-            <p>OCR je návrh, ne ověření dokladu. Prohlédni originál, zkontroluj částku i dodavatele a teprve pak ulož.</p>
+            <p>Vysoká jistota OCR nevyžaduje další schvalování. Pokud je částka nebo dodavatel nesprávný, oprav údaj zde. Originální doklad zůstává uložený.</p>
             {(editing.ocr.merchantCandidates||[]).length>0&&<div className="ocr-candidates">
               <span>Možní dodavatelé:</span>
               {editing.ocr.merchantCandidates.slice(0,4).map(c=><button key={c.name} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('merchant');if(inp)inp.value=c.name}}>{c.name}</button>)}

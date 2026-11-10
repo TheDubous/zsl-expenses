@@ -4,26 +4,35 @@ export const VARIANT_SHEETS=['s.2 - súhlas MV','s.5 - kniha jázd_Kufel_2'];
 export const TEMPLATE_ID='zsl-original-xlsx-template';
 const rounded=n=>Math.round(Number(n)*100)/100;
 const dateText=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))?[s.slice(8,10),s.slice(5,7),s.slice(2,4)].join('.'):null;
+export const excelDateSerial=iso=>{
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(iso||'')))return null;
+ const day=Date.parse(iso+'T00:00:00Z');
+ return Number.isFinite(day)?Math.round((day-Date.UTC(1899,11,30))/86400000):null;
+};
 const timeValue=s=>/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(s||''))?(Number(s.slice(0,2))*60+Number(s.slice(3,5)))/1440:null;
 const t=(sheet,cell,value)=>value==null||String(value).trim()===''?null:{sheet,cell,value:String(value),kind:'text'};
 const n=(sheet,cell,value)=>value==null||!Number.isFinite(Number(value))?null:{sheet,cell,value:Number(value),kind:'number'};
 const S1='s.1 - pokyn',S3='s.3 - výdavky',S4='s.4 - stravné zahr.',S6='s.6 - správa';
-export function recommendedZslSection(expense){
+export function recommendedZslSection(expense,event){
   // Ownership of a vehicle and eligibility of a meal allowance cannot be
   // deduced solely from OCR; these items require a one-time human selection.
   if(expense.zsl_section)return expense.zsl_section;
-  if(expense.category==='fuel'||expense.category==='food')return 'unassigned';
+  if(expense.category==='fuel'){
+    return ['zsl_car','private_car','company_car'].includes(event?.defaultFuelSection)
+      ?event.defaultFuelSection:'unassigned';
+  }
+  if(expense.category==='food')return 'unassigned';
   if(expense.category==='lodging')return 'lodging';
   if(expense.category==='travel')return 'transport';
   return 'other'; // Resort fees, parking and other actual receipts.
 }
 export function exportExpenseReadiness(expense,event){
-  const issues=[],warnings=[],section=recommendedZslSection(expense);
+  const issues=[],warnings=[],section=recommendedZslSection(expense,event);
   const name=expense.merchant||expense.receipt_name||'Neznámá účtenka';
   if(!expense.receipt_path)issues.push('chybí fotografie nebo PDF účtenky');
   if(!(Number(expense.amount)>0))issues.push('chybí ověřená částka');
   if(!String(expense.merchant||'').trim())issues.push('chybí dodavatel');
-  if(expense.ocr?.reviewed===false)warnings.push('automaticky rozpoznané údaje zatím nebyly ručně potvrzené');
+  if(expense.ocr?.reviewed===false&&!expense.ocr?.autoReady)warnings.push('nízká jistota OCR – zkontroluj rozpoznanou částku nebo dodavatele');
   if(expense.payment_method==='card'&&!expense.bank_path)
     warnings.push('bankovní potvrzení zatím chybí – částka přesto patří do evidence; potvrzení přilož před odevzdáním');
   if(!['cash','card'].includes(expense.payment_method))
@@ -48,11 +57,11 @@ export function buildTemplatePatches({event,trainer,riders=[],expenses=[],fundin
  const add=p=>{if(p)patches.push(p)};
  const coach=[trainer?.title,trainer?.name].filter(Boolean).join(' ');
  [
-  t(S1,'B4',coach),t(S1,'G4',trainer?.role),t(S1,'B6',trainer?.address),
+  t(S1,'B4',coach),t(S1,'G4',trainer?.role),t(S1,'B6',trainer?.address),t(S1,'G6',trainer?.department),
   t(S1,'B8',trainer?.contact),t(S1,'H8',trainer?.iban),
-  t(S1,'B12',dateText(event?.startsOn)),n(S1,'C12',timeValue(event?.startTime)),
+  n(S1,'B12',excelDateSerial(event?.startsOn)),n(S1,'C12',timeValue(event?.startTime)),
   t(S1,'D12',event?.startPlace),t(S1,'F12',[event?.location,event?.country].filter(Boolean).join(', ')),
-  t(S1,'H12',event?.purpose||event?.kind),t(S1,'J12',dateText(event?.endsOn)),
+  t(S1,'H12',event?.purpose||event?.kind),n(S1,'J12',excelDateSerial(event?.endsOn)),
   n(S1,'K12',timeValue(event?.endTime)),t(S1,'L12',event?.endPlace),
   t(S1,'B18',trainer?.name),t(S1,'F18',trainer?.name)
  ].forEach(add);
@@ -102,18 +111,18 @@ export function buildTemplatePatches({event,trainer,riders=[],expenses=[],fundin
   const amount=rounded(e.amount),cells=[];
   if(section==='transport')cells.push(t(S3,'C'+row,name),t(S3,'D'+row,e.note||'Iná miestna doprava'),n(S3,'I'+row,amount));
   else if(section==='zsl_car'){
-   const info=[e.vehicleDetails||'',name,dateText(e.spent_on)].filter(Boolean).join(' – ');
+   const info=[e.vehicleDetails||event?.vehicleDetails||'',name,dateText(e.spent_on)].filter(Boolean).join(' – ');
    cells.push(t(S3,'C'+row,info),n(S3,'F'+row,amount),n(S3,'H'+row,amount));
   }else if(section==='lodging'||section==='other'){
    cells.push(t(S3,'C'+row,e.note?name+' – '+e.note:name),n(S3,'F'+row,amount),n(S3,'H'+row,amount));
   }else if(section==='foreign_meal'){
-   cells.push(t(S4,'B'+row,dateText(e.spent_on)),t(S4,'C'+row,'Pokladničný doklad zo strav. zariadenia'),t(S4,'F'+row,name),t(S4,'I'+row,'EUR'),n(S4,'J'+row,amount));
+   cells.push(n(S4,'B'+row,excelDateSerial(e.spent_on)),t(S4,'C'+row,'Pokladničný doklad zo strav. zariadenia'),t(S4,'F'+row,name),t(S4,'I'+row,'EUR'),n(S4,'J'+row,amount));
   }
   cells.filter(Boolean).forEach(p=>add({...p,group:'receipt:'+e.id,rowStart:cfg.start,rowEnd:cfg.end}));
  }
  if(event?.reportText){
   add(t(S6,'B3',event.reportText));add(t(S6,'D20',trainer?.name));
-  add(t(S6,'I20',dateText(event?.endsOn)));add(t(S6,'C26',trainer?.name));
+  add(n(S6,'I20',excelDateSerial(event?.endsOn)));add(t(S6,'C26',trainer?.name));
   add(t(S6,'F26',trainer?.role||'Tréner'));
   riders.slice(0,20).forEach((r,i)=>{add(t(S6,'C'+(27+i),r.name));add(t(S6,'F'+(27+i),'Športovec'));});
  }

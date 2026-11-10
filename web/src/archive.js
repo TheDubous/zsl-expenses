@@ -63,7 +63,7 @@ export async function exportEvent(event,expenses,funding){
   for(const [index,e] of expenses.entries()){
     const dir=folder.folder(String(index+1).padStart(3,'0')+'_'+safeFilename(e.merchant||e.receipt_name||'vydaj'));
     rows.push([e.id,e.spent_on,e.merchant,e.amount,event.currency,CATEGORIES.find(c=>c.id===e.category)?.label||'Ostatní',
-      ZSL_EXPENSE_SECTIONS.find(x=>x.id===expenseSection(e))?.label||'NEZARADENÉ',e.vehicleDetails||'',e.payment_method,expenseStatus(e)]);
+      ZSL_EXPENSE_SECTIONS.find(x=>x.id===expenseSection(e,event))?.label||'NEZARADENÉ',e.vehicleDetails||'',e.payment_method,expenseStatus(e)]);
     for(const f of [
       {id:e.receipt_path,prefix:'Uctenka',name:e.receipt_name},
       {id:e.bank_path,prefix:'Bankovni_potvrzeni',name:e.bank_name}
@@ -77,7 +77,7 @@ export async function exportEvent(event,expenses,funding){
   zip.file('Vydaje.csv','\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n'));
   zip.file('Zaloha_a_pohyby.csv','\ufeff'+[
     ['Typ','Datum','Castka','Mena','Poznamka'],
-    ...funding.map(f=>[f.kind,f.occurred_on,f.amount,event.currency,f.note])
+    ...funding.map(f=>[f.kind,f.occurredOn||f.occurred_on,f.amount,event.currency,f.note])
   ].map(r=>r.map(csvCell).join(';')).join('\r\n'));
   zip.file('Kontrola_dokladu.txt',expenses.filter(e=>expenseStatus(e)!=='Doklady kompletní').map(e=>[e.merchant||e.receipt_name,e.amount,expenseStatus(e)].join(' | ')).join('\r\n')||'Všechny doklady jsou kompletní.');
   const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:1}});

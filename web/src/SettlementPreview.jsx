@@ -48,14 +48,14 @@ export default function SettlementPreview({
    <div className="zsl-download-split">
     <div className="zsl-download-option">
       <FileSpreadsheet size={27}/>
-      <h4>1. Původní ZSL výkaz (XLSX)</h4>
-      <p>Stejný excelový soubor jako originál; pouze doplněné vstupní buňky v příslušných listech. Vzorce se přepočítají po otevření v Excelu.</p>
+      <h4>1. Původní ZSL výkaz (.xlsx)</h4>
+      <p>Skutečný soubor Excel, nikoli PDF. Originální listy, formátování a vzorce zůstávají zachované. Pro definitivní přepočet otevři .xlsx v aplikaci Microsoft Excel, ne jen v rychlém náhledu iPhonu.</p>
       <button className="btn" onClick={()=>onDownloadXlsx(allowExisting)} disabled={busy||!templateInfo||(templateInfo.hasExistingTrip&&!allowExisting)||(expenses.length>0&&valid.length===0)}><Download size={17}/> Stáhnout vyplněný originál</button>
       {expenses.length>0&&valid.length===0&&<p className="zsl-blocked-export">Žádný výdaj ještě není připravený pro zápis. Vyber sekce výdajů níže; jinak by byl Excel prázdný.</p>}
     </div>
     <div className="zsl-download-option">
       <FileText size={27}/>
-      <h4>2. Přílohy výkazu (PDF)</h4>
+      <h4>2. Pouze účtenky a potvrzení (.pdf)</h4>
       <p>Účtenky seřazené po jednotlivých výdajích, ke každé platbě kartou její bankovní potvrzení. Chybějící dokumenty budou uvedené v kontrole.</p>
       <button className="btn secondary" onClick={onDownloadAttachments} disabled={busy||!expenses.length}><Download size={17}/> Stáhnout PDF příloh</button>
     </div>
@@ -82,7 +82,7 @@ export default function SettlementPreview({
      </div>
      <div className="zsl-preflight-controls">
        <label>Kam zapsat v ZSL?
-         <select value={recommendedZslSection(expense)} disabled={busy} onChange={e=>onSetExpenseSection(expense,e.target.value)}>
+         <select value={recommendedZslSection(expense,event)} disabled={busy} onChange={e=>onSetExpenseSection(expense,e.target.value)}>
            <option value="unassigned">Vyžaduje rozhodnutí – nezařazeno</option>
            <option value="zsl_car">s.3 – Motorové vozidlo ZSL (tankovanie)</option>
            <option value="private_car">s.3 – Súkromné vozidlo (vyžaduje km)</option>
@@ -123,6 +123,7 @@ export default function SettlementPreview({
    </div>}
    {exportAudit&&<div className="zsl-audit">
      <Message type="success">Do originálního Excelu se skutečně zapsalo <strong>{exportAudit.financialReceiptCount||0} z {exportAudit.expectedReceiptCount||0}</strong> výdajů v hodnotě <strong>{currency(exportAudit.financialAmount||0,event.currency)}</strong>. Změněno {exportAudit.changes.length} buněk. Obsazené původní oblasti: {exportAudit.conflicts.length}.</Message>
+     <p className="muted smalltext"><strong>Kontrola originálu:</strong> zachováno {exportAudit.integrity?.preservedFormulas??'—'} původních vzorců, {exportAudit.integrity?.preservedStyles??'—'} formátovaných buněk a {exportAudit.integrity?.sheets??'—'} listů. Pro náhled v iPhonu aktualizováno {exportAudit.formulaCache?.updated??0} uložených výsledků; {exportAudit.formulaCache?.unsupported??0} složitých výpočtů vyžaduje otevření v Excelu.</p>
      {(exportAudit.conflicts||[]).map((v,i)=><Message key={i}>{v}</Message>)}
      {(exportAudit.warnings||[]).map((v,i)=><Message key={'w'+i}>{v}</Message>)}
      <details open={false}><summary>Zobrazit přesně změněné buňky ({exportAudit.changes.length})</summary>

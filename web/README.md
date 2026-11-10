@@ -1,5 +1,32 @@
 # ZSL Expenses · Lokální PWA (bez databázového serveru)
 
+## ZSL Expenses v0.9 – téměř finální provozní verze
+
+### Nový režim pro trenéra (bez schvalování)
+- Jedna **lokální aplikace pro trenéra**, bez přihlašování, nadřízených rolí a schvalovacího workflow. Všechna data zůstávají v místní IndexedDB telefonu.
+- OCR s vysokou jistotou částky, dodavatele a data se označí **Automaticky načteno**, bez nutnosti jednotlivě potvrzovat. OCR s nižší jistotou zůstává nápadně označené. Údaje je stále možné kdykoliv ručně opravit.
+- Ve **Vytvořit akci / Upravit údaje cesty** lze jednou nastavit **typ vozidla pro tankování**: ZSL, soukromé, právnické osoby nebo neurčené. Lze zadat značku a EČV. Jednotlivá účtenka může mít výjimku. Pro soukromá nebo firemní auta aplikace neodvozuje kilometry, normovanou spotřebu ani nárok bez skutečných údajů.
+
+### Zachované původní ZSL XLSX a fungující vzorce
+- Export pořád upravuje **přímo kopii původního XLSX ZSL** a nikdy nevytváří napodobeninu tabulky. Veřejná oficiální šablona se automaticky načte, dříve uložená soukromá varianta zůstane zachovaná.
+- Prohlížíme všechny původní **vzorce, formátované buňky a sloučené oblasti** před a po exportu. Při poškození se export zastaví.
+- Excel data a časy ukládáme jako **číselné excelové hodnoty**, ne jako text (to je důležité pro původní funkce).
+- V originálu jsou i **sdílené vzorce** – např. \`s.4 - stravné zahr.!L74:L107\`. Funkce na iPhonu zachovává celé původní sdílení, aktualizuje jejich čísla a pro další účetní doklady nezapisuje jen nulu.
+- Pro základní finanční řetězec podporujeme bezpečný přepočet uložených výsledků vzorců pro náhled: \`SUM\`, číselná aritmetika, \`MIN\`, odkazy na buňky i mezi listy. **Původní text vzorců se nemění.** Při otevření v Excelu je navíc zapnutá automatická úplná rekalkulace.
+- **Důležité omezení:** komplexní dietové výpočty, \`IFERROR/VLOOKUP\` a další nárokové vzorce nejsou plně přepočítané v prohlížeči. **Konečné PDF samotného výkazu a konečné vyúčtování vytvoř z XLSX v Microsoft Excelu**, který umí přepočítat všechny původní vzorce. Rychlý náhled iPhonu neber za konečné účetnictví.
+- Profily trenérů přenáší mimo jiné jméno, funkci, adresu, **Oddelenie ZSL (G6)**, telefon a IBAN. Jezdci a soupiska se zachovají. Nároky stravného nebo soukromého auta se neodhadují.
+
+### Dva samostatné výstupy, kontrola a zálohy
+- **.xlsx** = skutečný původní cestovní příkaz ZSL s účetními položkami a zachovanými vzorci.
+- **.pdf** = pouze účtenky a bankovní potvrzení, správně přiřazené k výdajům, bez falšování vzhledu tabulky.
+- Po exportu uvidíš počet dokladů, jejich hodnotu, počet původních zachovaných vzorců a formátovaných buněk i výčet účtenek, které nebylo bezpečné zapsat. Při nulovém počtu zapsaných účetních dokladů se export nevytvoří.
+- **Kompletní záloha ZIP** zůstává doporučená, protože data na iPhonu nemusí být uchována navždy. Mezi zařízeními není cloudová synchronizace.
+
+### Kontrolní testy
+Při každém sestavení GitHub Actions ověřuje skutečný 11-listový veřejný originální XLSX včetně data, profilů, více účtenek stejné kategorie, zahraničního jídla, zachování všech původních vzorců a stylů, bezpečných mezisoučtů a sestavení offline PWA. PDF příloh, import/export zálohy, OCR heuristiky a správa jezdců mají samostatné unit testy.
+
+---
+
 ## v0.8.1 – oprava finančního zápisu do originálního ZSL Excelu
 
 Předchozí export mohl stáhnout XLSX, do kterého se dopsali pouze sportovci, zatímco všechny účtenky byly přeskočeny. Příčina:

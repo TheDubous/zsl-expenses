@@ -3,6 +3,8 @@ import {buildTemplatePatches,REQUIRED_SHEETS,VARIANT_SHEETS,TEMPLATE_ID} from '.
 import {getOne,putOne} from './localdb.js';
 import {downloadBlob} from './archive.js';
 import {safeFilename} from './utils.mjs';
+import {refreshFormulaCaches,CORE_ZSL_FORMULA_CELLS} from './zsl-formula-cache.mjs';
+import {verifyOriginalWorksheetIntegrity} from './zsl-integrity.mjs';
 
 const NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const RNS='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -235,25 +237,83 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
     'Ve vestavěné šabloně nebyly nalezené vhodné volné buňky.')+
     ' Otevři Náhled → Kontrola zařazení výdajů.');
  }
- for(const item of touched.values()){
-  const serialized=new Serializer().serializeToString(item.xml);
-  zip.file(item.path,serialized);
+
+ // Original Excel sheets contain formulas with cached values (<f> + <v>).
+ // iPhone Files/Quick Look commonly shows only the cached values and never
+ // recalculates them. Refresh the safe SUM/reference/arithmetic subset while
+ // preserving formula XML, number formats and every other source XLSX part.
+ const xmlBySheet=new Map();
+ for(const [name,path] of sheets){
+  const existing=touched.get(name);
+  xmlBySheet.set(name,existing?.xml||parseXml(await zip.file(path).async('string'),Parser));
  }
- // The original formulas are kept verbatim, but cached values need recalculation by Excel.
+ const repairedFormulaRows=[];
+ const foreign=xmlBySheet.get('s.4 - stravné zahr.');
+ const foreignData=foreign?descendants(foreign,'sheetData')[0]:null;
+ for(const patch of changes){
+  if(patch.sheet!=='s.4 - stravné zahr.'||!/^J\d+$/.test(patch.cell))continue;
+  const row=Number(patch.cell.slice(1));
+  if(row<74||row>107)continue;
+  const computed=sourceCell(foreignData,'L'+row);
+  if(!computed){warnings.push('Príspevok na stravovanie: chýba výpočtová bunka L'+row);continue}
+  let formula=direct(computed,'f');
+  if(!formula){
+   const cached=direct(computed,'v');
+   // In the public original, L74 already has J74/K74 but subsequent rows
+   // contain a zero placeholder. Only convert a zero placeholder belonging
+   // to a receipt we actually wrote; never overwrite an existing number.
+   if(cached&&Number(cached.textContent||0)!==0){
+    warnings.push('Pôvodná bunka L'+row+' obsahuje vlastné údaje, nevymieňame ich za vzorec.');
+    continue;
+   }
+   formula=foreign.createElementNS(NS,'f');formula.textContent='J'+row+'/K'+row;
+   computed.insertBefore(formula,cached||null);
+   repairedFormulaRows.push(row);
+  }
+ }
+ const formulaTargets=[...CORE_ZSL_FORMULA_CELLS,
+  ...changes.filter(x=>x.sheet==='s.4 - stravné zahr.'&&/^J\d+$/.test(x.cell))
+    .map(x=>({sheet:'s.4 - stravné zahr.',cell:'L'+x.cell.slice(1)}))];
+ const formulaCache=refreshFormulaCaches(xmlBySheet,{targets:formulaTargets});
+ const mutatedNames=new Set([...touched.keys(),...formulaCache.changed.map(c=>c.sheet)]);
+ if(repairedFormulaRows.length)mutatedNames.add('s.4 - stravné zahr.');
+ let preservedFormulas=0,preservedStyles=0;
+ for(const [name,path] of sheets){
+  // Work on XML DOM loaded from the real source workbook, comparing against the
+  // untouched ZIP entries before any serialized changes are written back.
+  const original=parseXml(await zip.file(path).async('string'),Parser);
+  const integrity=verifyOriginalWorksheetIntegrity(original,xmlBySheet.get(name),name);
+  preservedFormulas+=integrity.formulaCount;
+  preservedStyles+=integrity.formattedCellCount;
+ }
+ for(const name of mutatedNames){
+  zip.file(sheets.get(name),new Serializer().serializeToString(xmlBySheet.get(name)));
+ }
+ if(formulaCache.unsupported){
+  warnings.push('Niektoré zložité vzorce ZSL (najmä diety) sa neprepočítavajú v telefóne. Po otvorení v Microsoft Exceli sa prepočítajú automaticky.');
+ }
+ // The original formulas are still present byte-for-byte as formula TEXT;
+ // ask Microsoft Excel to recompute the complete workbook on first opening.
  const calcs=descendants(book,'calcPr');
  if(calcs.length){
   calcs[0].setAttribute('fullCalcOnLoad','1');
   calcs[0].setAttribute('forceFullCalc','1');
+  calcs[0].setAttribute('calcOnSave','1');
+  calcs[0].setAttribute('calcMode','auto');
   calcs[0].setAttribute('calcId','0');
  }else{
   const cp=book.createElementNS(NS,'calcPr');
   cp.setAttribute('fullCalcOnLoad','1');
   cp.setAttribute('forceFullCalc','1');
+  cp.setAttribute('calcOnSave','1');
+  cp.setAttribute('calcMode','auto');
   book.documentElement.appendChild(cp);
  }
  zip.file('xl/workbook.xml',new Serializer().serializeToString(book));
  const out=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}});
  return {blob:out,template:inspected,changes,warnings,skipped,conflicts,
+  formulaCache:{...formulaCache,repairedForeignMealRows:repairedFormulaRows},
+  integrity:{preservedFormulas,preservedStyles,sheets:sheets.size},
   financialReceiptCount,financialAmount,
   expectedReceiptCount:expenses.length,
   filename:'ZSL_VYPLNENY_ORIGINAL_'+safeFilename(event?.name||'vyuctovanie')+'.xlsx'};

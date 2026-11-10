@@ -17,6 +17,8 @@ export const ZSL_EXPENSE_SECTIONS=[
   {id:'zsl_car',label:'Motorové vozidlo ZSL',short:'Motorové vozidlo ZSL'},
   {id:'lodging',label:'Náhrada preukázaných výdavkov za ubytovanie',short:'Ubytovanie'},
   {id:'other',label:'INÉ vedľajšie výdavky (mýto, parkovné, skipassy, prenájom infraštruktúry..)',short:'INÉ vedľajšie výdavky'},
+  {id:'foreign_meal',label:'s.4 - stravné zahr. – Pokladničné doklady zo stravovacích zariadení',short:'Príspevok na stravu zahraničie'},
+  {id:'domestic_meal',label:'s.4 - stravné tuzem. – stravné a príspevky na stravu',short:'Strava tuzemsko'},
   {id:'unassigned',label:'NEZARADENÉ - určite typ vozidla alebo druh výdavku',short:'Nezaradené (vyžaduje kontrolu)'}
 ];
 export const ZSL_SETTLEMENT_ROWS=[
@@ -34,9 +36,11 @@ export const NOT_COMPUTED='NEVYPOČÍTANÉ';
 const CENT=value=>Math.round((Number(value)||0)*100);
 export const num2=value=>Math.round((Number(value)||0)*100)/100;
 function sumCents(list){return list.reduce((acc,item)=>acc+CENT(item.amount),0)/100}
-export function expenseSection(expense){
+export function expenseSection(expense,event){
   if(ZSL_EXPENSE_SECTIONS.some(x=>x.id===expense.zsl_section))return expense.zsl_section;
-  if(expense.category==='fuel')return 'unassigned'; // Never assume a vehicle owner.
+  if(expense.category==='fuel')
+    return ['zsl_car','private_car','company_car'].includes(event?.defaultFuelSection)?event.defaultFuelSection:'unassigned';
+  if(expense.category==='food')return 'unassigned';
   if(expense.category==='lodging')return 'lodging';
   if(expense.category==='travel')return 'transport';
   return 'other';
@@ -44,7 +48,7 @@ export function expenseSection(expense){
 export function makeZslReport({event,trainer,riders=[],expenses=[],funding=[]}){
   const financial=summarize(expenses,funding);
   const sections=ZSL_EXPENSE_SECTIONS.map(section=>{
-    const entries=[...expenses].filter(e=>expenseSection(e)===section.id).sort((a,b)=>(a.spent_on||'').localeCompare(b.spent_on||''));
+    const entries=[...expenses].filter(e=>expenseSection(e,event)===section.id).sort((a,b)=>(a.spent_on||'').localeCompare(b.spent_on||''));
     return {...section,expenses:entries,total:sumCents(entries)};
   });
   const travel=sumCents(expenses.filter(x=>['travel','fuel'].includes(x.category)));
@@ -67,7 +71,7 @@ export function makeZslReport({event,trainer,riders=[],expenses=[],funding=[]}){
   const invalid=expenses.filter(e=>expenseStatus(e)!=='Doklady kompletní');
   for(const e of invalid)missing.push('Doklad: '+(e.merchant||e.receipt_name||e.id)+' - '+expenseStatus(e));
   const unassigned=sections.find(x=>x.id==='unassigned');
-  if(unassigned.expenses.length)missing.push('Typ vozidla pre tankovanie: '+unassigned.expenses.length+' nezařazených dokladů');
+  if(unassigned.expenses.length)missing.push('Zařazení paliva nebo stravy: '+unassigned.expenses.length+' nezařazených dokladů');
   if(event?.currency!=='EUR')missing.push('Prepočet na EUR - nie je nastavený; základné sumy sú v '+(event?.currency||'meně'));
   return {
     event,trainer,riders,expenses:[...expenses].sort((a,b)=>(a.spent_on||'').localeCompare(b.spent_on||'')),
