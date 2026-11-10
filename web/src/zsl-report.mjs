@@ -71,7 +71,7 @@ export function makeZslReport({event,trainer,riders=[],expenses=[],funding=[]}){
   const invalid=expenses.filter(e=>expenseStatus(e)!=='Doklady kompletní');
   for(const e of invalid)missing.push('Doklad: '+(e.merchant||e.receipt_name||e.id)+' - '+expenseStatus(e));
   const unassigned=sections.find(x=>x.id==='unassigned');
-  if(unassigned.expenses.length)missing.push('Typ vozidla pre tankovanie: '+unassigned.expenses.length+' nezařazených dokladů');
+  if(unassigned.expenses.length)missing.push('Zařazení paliva nebo stravy: '+unassigned.expenses.length+' nezařazených dokladů');
   if(event?.currency!=='EUR')missing.push('Prepočet na EUR - nie je nastavený; základné sumy sú v '+(event?.currency||'meně'));
   return {
     event,trainer,riders,expenses:[...expenses].sort((a,b)=>(a.spent_on||'').localeCompare(b.spent_on||'')),
