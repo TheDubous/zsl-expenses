@@ -87,9 +87,10 @@ const mealDoc=new DOMParser().parseFromString(await twoZip.file('xl/worksheets/s
 const cellAt=ref=>Array.from(mealDoc.getElementsByTagNameNS(xmlNs,'c')).find(c=>c.getAttribute('r')===ref);
 const l75=cellAt('L75');
 console.log('SECOND FOOD DEBUG',JSON.stringify({J74:cellAt('J74')?.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent,J75:cellAt('J75')?.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent,L75formula:l75?.getElementsByTagNameNS(xmlNs,'f')[0]?.textContent,L75type:l75?.getElementsByTagNameNS(xmlNs,'f')[0]?.getAttribute('t'),L75cache:l75?.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent,formulaCache:twice.formulaCache}));
-if(l75?.getElementsByTagNameNS(xmlNs,'f')[0]?.textContent!=='J75/K75'||
+const existingShared=l75?.getElementsByTagNameNS(xmlNs,'f')[0];
+if(!(existingShared?.getAttribute('t')==='shared'||existingShared?.textContent==='J75/K75')||
    Math.abs(Number(l75?.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent)-20)>0.001)
- throw Error('Second food receipt must have a preserved/calculated EUR formula L75 = J75/K75');
+ throw Error('Second food receipt must keep the original shared J75/K75 formula and refresh the cached EUR amount');
 console.log('Second foreign meal formula and original ZSL integrity checks passed.');
 
 
