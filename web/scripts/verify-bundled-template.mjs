@@ -6,22 +6,7 @@ const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument
 const xml={DOMParserCtor:DOMParser,XMLSerializerCtor:XMLSerializer};
 const info=await inspectZslXlsx(blob,xml);
 console.log('Official template:',JSON.stringify({variant:info.variant,sheets:info.sheets.length,hasExistingTrip:info.hasExistingTrip,existing:info.existing.length,existingCells:info.existing}));
-// Verify the original foreign-food receipt block begins after its real heading.
 const {default:JSZip}=await import('jszip');
-const parts=await JSZip.loadAsync(bytes);
-const foreignXML=await parts.file('xl/worksheets/sheet5.xml')?.async('string');
-const stringsDoc=new DOMParser().parseFromString(await parts.file('xl/sharedStrings.xml').async('string'),'application/xml');
-const sharedTexts=Array.from(stringsDoc.getElementsByTagName('si')).map(si=>Array.from(si.getElementsByTagName('t')).map(t=>t.textContent).join(''));
-const foreignDoc=new DOMParser().parseFromString(foreignXML,'application/xml');
-for(const row of Array.from(foreignDoc.getElementsByTagName('row')).filter(r=>Number(r.getAttribute('r'))>=69&&Number(r.getAttribute('r'))<=79)){
-  const cells=Array.from(row.getElementsByTagName('c')).flatMap(c=>{
-    const ref=c.getAttribute('r'),v=c.getElementsByTagName('v')[0]?.textContent,formula=c.getElementsByTagName('f')[0]?.textContent;
-    if(!/^(B|C|F|I|J|K|L)[0-9]+$/.test(ref))return [];
-    const text=c.getAttribute('t')==='s'?sharedTexts[Number(v)]:v||'';
-    return text||formula?[ref+'='+String(formula?'formula:'+formula:text).slice(0,56)]:[];
-  });
-  if(cells.length)console.log('OFFICIAL foreign meal row',row.getAttribute('r'),cells.join(' | '));
-}
 if(info.variant!=='official'||info.sheets.length!==11)
  throw new Error('Downloaded template is not the approved 11-sheet official version.');
 const data={
@@ -86,7 +71,6 @@ const twoZip=await JSZip.loadAsync(twice.blob);
 const mealDoc=new DOMParser().parseFromString(await twoZip.file('xl/worksheets/sheet5.xml').async('string'),'application/xml');
 const cellAt=ref=>Array.from(mealDoc.getElementsByTagNameNS(xmlNs,'c')).find(c=>c.getAttribute('r')===ref);
 const l75=cellAt('L75');
-console.log('SECOND FOOD DEBUG',JSON.stringify({J74:cellAt('J74')?.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent,J75:cellAt('J75')?.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent,L75formula:l75?.getElementsByTagNameNS(xmlNs,'f')[0]?.textContent,L75type:l75?.getElementsByTagNameNS(xmlNs,'f')[0]?.getAttribute('t'),L75cache:l75?.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent,formulaCache:twice.formulaCache}));
 const existingShared=l75?.getElementsByTagNameNS(xmlNs,'f')[0];
 if(!(existingShared?.getAttribute('t')==='shared'||existingShared?.textContent==='J75/K75')||
    Math.abs(Number(l75?.getElementsByTagNameNS(xmlNs,'v')[0]?.textContent)-20)>0.001)
