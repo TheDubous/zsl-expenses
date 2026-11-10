@@ -82,7 +82,7 @@ export default function SettlementPreview({
      </div>
      <div className="zsl-preflight-controls">
        <label>Kam zapsat v ZSL?
-         <select value={recommendedZslSection(expense)} disabled={busy} onChange={e=>onSetExpenseSection(expense,e.target.value)}>
+         <select value={recommendedZslSection(expense,event)} disabled={busy} onChange={e=>onSetExpenseSection(expense,e.target.value)}>
            <option value="unassigned">Vyžaduje rozhodnutí – nezařazeno</option>
            <option value="zsl_car">s.3 – Motorové vozidlo ZSL (tankovanie)</option>
            <option value="private_car">s.3 – Súkromné vozidlo (vyžaduje km)</option>
