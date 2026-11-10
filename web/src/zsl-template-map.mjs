@@ -57,7 +57,7 @@ export function buildTemplatePatches({event,trainer,riders=[],expenses=[],fundin
  const add=p=>{if(p)patches.push(p)};
  const coach=[trainer?.title,trainer?.name].filter(Boolean).join(' ');
  [
-  t(S1,'B4',coach),t(S1,'G4',trainer?.role),t(S1,'B6',trainer?.address),
+  t(S1,'B4',coach),t(S1,'G4',trainer?.role),t(S1,'B6',trainer?.address),t(S1,'G6',trainer?.department),
   t(S1,'B8',trainer?.contact),t(S1,'H8',trainer?.iban),
   n(S1,'B12',excelDateSerial(event?.startsOn)),n(S1,'C12',timeValue(event?.startTime)),
   t(S1,'D12',event?.startPlace),t(S1,'F12',[event?.location,event?.country].filter(Boolean).join(', ')),
