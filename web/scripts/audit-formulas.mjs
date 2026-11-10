@@ -35,3 +35,18 @@ for(const [name,index,refs] of inputs){
   return {ref,style:cell?.getAttribute('s')||'',type:cell?.getAttribute('t')||'',f:cell?.getElementsByTagNameNS(ns,'f')[0]?.textContent||null,v:cell?.getElementsByTagNameNS(ns,'v')[0]?.textContent||null};
  })));
 }
+
+const sharedXml=new DOMParser().parseFromString(await zip.file('xl/sharedStrings.xml').async('string'),'application/xml');
+const strs=Array.from(sharedXml.getElementsByTagNameNS(ns,'si')).map(si=>Array.from(si.getElementsByTagNameNS(ns,'t')).map(t=>t.textContent).join(''));
+for(const [label,sheetNumber,rows] of [['s.1 - pokyn',1,22],['s.6 - správa',7,32]]){
+ const xml=new DOMParser().parseFromString(await zip.file('xl/worksheets/sheet'+sheetNumber+'.xml').async('string'),'application/xml');
+ for(const row of Array.from(xml.getElementsByTagNameNS(ns,'row')).filter(r=>Number(r.getAttribute('r'))<=rows)){
+  const selected=Array.from(row.getElementsByTagNameNS(ns,'c')).flatMap(c=>{
+   const ref=c.getAttribute('r'),v=c.getElementsByTagNameNS(ns,'v')[0]?.textContent||'';
+   const f=c.getElementsByTagNameNS(ns,'f')[0]?.textContent||'';
+   const value=c.getAttribute('t')==='s'?strs[Number(v)]:v;
+   return value||f?[ref+'='+String(value||'='+f).slice(0,55)]:[];
+  });
+  if(selected.length)console.log('SOURCE-LABELS',label,'row',row.getAttribute('r'),selected.slice(0,15).join(' | '));
+ }
+}
