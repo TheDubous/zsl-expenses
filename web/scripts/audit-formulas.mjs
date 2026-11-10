@@ -21,3 +21,17 @@ for(const [name,idx] of sheets){
   false
  ).slice(0,95)));
 }
+
+const inputs=[
+ ['s.1 - pokyn',1,['B12','J12','C12','K12','I30','I32','I33','I34','I35','I36','I37','I38','I39','I40']],
+ ['s.4 - stravné tuzem.',4,['H85','H86']],
+ ['s.4 - stravné zahr.',5,['L74','L75','L76','H110','I110','H111','I111','B74','B75']]
+];
+for(const [name,index,refs] of inputs){
+ const xml=new DOMParser().parseFromString(await zip.file('xl/worksheets/sheet'+index+'.xml').async('string'),'application/xml');
+ const cells=Array.from(xml.getElementsByTagNameNS(ns,'c'));
+ console.log('IMPORTANT-CELLS',name,JSON.stringify(refs.map(ref=>{
+  const cell=cells.find(c=>c.getAttribute('r')===ref);
+  return {ref,style:cell?.getAttribute('s')||'',type:cell?.getAttribute('t')||'',f:cell?.getElementsByTagNameNS(ns,'f')[0]?.textContent||null,v:cell?.getElementsByTagNameNS(ns,'v')[0]?.textContent||null};
+ })));
+}
