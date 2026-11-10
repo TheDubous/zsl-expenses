@@ -218,3 +218,25 @@ test('no valid financial receipt throws rather than downloading an Excel with on
   {event,trainer,riders:[{name:'Athlete A'}],expenses:[empty],funding:[]},X),
   /Excel by neobsahoval žádnou finanční položku/);
 });
+
+test('a trainer sets vehicle owner once for the trip and all fuel receipts use that ZSL section',async()=>{
+ const trip={...event,defaultFuelSection:'zsl_car',vehicleDetails:'Renault Trafic AA-619RJ'};
+ const fuel={id:'g1',category:'fuel',zsl_section:'',merchant:'Gutmann',receipt_path:'receipt1',
+  spent_on:'2026-11-02',amount:127.78,payment_method:'card',bank_path:null,
+  ocr:{confidence:'high',merchantConfidence:'high',reviewed:false,autoReady:true}};
+ const planned=buildTemplatePatches({event:trip,trainer,expenses:[fuel],variant:'official'});
+ assert.equal(planned.skipped.length,0);
+ assert.ok(planned.patches.some(x=>x.group==='receipt:g1'&&x.cell==='C26'&&
+   String(x.value).includes('Renault Trafic AA-619RJ')));
+ const out=await createFilledXlsx(await syntheticTemplate({variant:'official'}),
+  {event:trip,trainer,riders:[],expenses:[fuel],funding:[]},X);
+ assert.equal(out.financialReceiptCount,1);
+ assert.ok(out.changes.some(x=>x.cell==='H26'&&x.value===127.78));
+});
+test('no automatic company/private car reimbursement can be invented from OCR only',()=>{
+ const trip={...event,defaultFuelSection:'private_car'};
+ const receipt={...expense('private-gas',89),zsl_section:'',category:'fuel'};
+ const planned=buildTemplatePatches({event:trip,trainer,expenses:[receipt],variant:'official'});
+ assert.equal(planned.skipped.length,1);
+ assert.match(planned.skipped[0],/chybí podklady pro výpočet náhrady/);
+});
