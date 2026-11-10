@@ -4,6 +4,7 @@ import {getOne,putOne} from './localdb.js';
 import {downloadBlob} from './archive.js';
 import {safeFilename} from './utils.mjs';
 import {refreshFormulaCaches,CORE_ZSL_FORMULA_CELLS} from './zsl-formula-cache.mjs';
+import {verifyOriginalWorksheetIntegrity} from './zsl-integrity.mjs';
 
 const NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const RNS='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -276,6 +277,15 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
  const formulaCache=refreshFormulaCaches(xmlBySheet,{targets:formulaTargets});
  const mutatedNames=new Set([...touched.keys(),...formulaCache.changed.map(c=>c.sheet)]);
  if(repairedFormulaRows.length)mutatedNames.add('s.4 - stravné zahr.');
+ let preservedFormulas=0,preservedStyles=0;
+ for(const [name,path] of sheets){
+  // Work on XML DOM loaded from the real source workbook, comparing against the
+  // untouched ZIP entries before any serialized changes are written back.
+  const original=parseXml(await zip.file(path).async('string'),Parser);
+  const integrity=verifyOriginalWorksheetIntegrity(original,xmlBySheet.get(name),name);
+  preservedFormulas+=integrity.formulaCount;
+  preservedStyles+=integrity.formattedCellCount;
+ }
  for(const name of mutatedNames){
   zip.file(sheets.get(name),new Serializer().serializeToString(xmlBySheet.get(name)));
  }
@@ -288,17 +298,22 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
  if(calcs.length){
   calcs[0].setAttribute('fullCalcOnLoad','1');
   calcs[0].setAttribute('forceFullCalc','1');
+  calcs[0].setAttribute('calcOnSave','1');
+  calcs[0].setAttribute('calcMode','auto');
   calcs[0].setAttribute('calcId','0');
  }else{
   const cp=book.createElementNS(NS,'calcPr');
   cp.setAttribute('fullCalcOnLoad','1');
   cp.setAttribute('forceFullCalc','1');
+  cp.setAttribute('calcOnSave','1');
+  cp.setAttribute('calcMode','auto');
   book.documentElement.appendChild(cp);
  }
  zip.file('xl/workbook.xml',new Serializer().serializeToString(book));
  const out=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}});
  return {blob:out,template:inspected,changes,warnings,skipped,conflicts,
   formulaCache:{...formulaCache,repairedForeignMealRows:repairedFormulaRows},
+  integrity:{preservedFormulas,preservedStyles,sheets:sheets.size},
   financialReceiptCount,financialAmount,
   expectedReceiptCount:expenses.length,
   filename:'ZSL_VYPLNENY_ORIGINAL_'+safeFilename(event?.name||'vyuctovanie')+'.xlsx'};
