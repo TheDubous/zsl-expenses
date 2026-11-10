@@ -273,7 +273,7 @@ function App(){
     await run(async()=>{
       const result=await downloadFilledOriginal({event:active,trainer,riders:reportRiders,expenses,funding},{allowExisting});
       const {blob,...audit}=result;setExportAudit(audit);
-      setNotice('Původní XLSX stažen: '+result.financialReceiptCount+' z '+result.expectedReceiptCount+' výdajů, částka '+currency(result.financialAmount,active.currency)+'. Nezapsané položky: '+result.skipped.length+'; konflikty: '+result.conflicts.length+'.');
+      setNotice('Vyplněný původní XLSX stažen: '+result.financialReceiptCount+' z '+result.expectedReceiptCount+' výdajů ('+currency(result.financialAmount,active.currency)+'). Zachováno '+result.integrity.preservedFormulas+' vzorců. Otevři v Microsoft Excelu pro úplný přepočet.');
     });
   }
   async function downloadProofsPdf(){
@@ -468,7 +468,7 @@ function App(){
         templateInfo={templateInfo} exportAudit={exportAudit} attachmentAudit={attachmentAudit} busy={busy} onLoadBuiltIn={loadDefaultTemplate}
         onSetExpenseSection={selectExpenseSection} onEditExpense={expense=>setEditing(expense)}
       />:<Documents/>):<Placeholder title="Nejprve vytvoř akci" text="Potom se tu zobrazí její výdaje a přehled zálohy." icon={CalendarDays}/>}
-      <footer>Lokální prototyp · ukládej pravidelné ZIP zálohy · bez cloudové synchronizace</footer>
+      <footer>ZSL Expenses · lokální aplikace trenéra · soubory zůstávají v telefonu · pravidelně zálohuj ZIP</footer>
     </main>
     {newEvent&&<div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setNewEvent(false)}}>
       <div className="modal"><div className="heading"><h2>Nové vyúčtování</h2><button aria-label="Zavřít" onClick={()=>setNewEvent(false)}><X size={20}/></button></div>
