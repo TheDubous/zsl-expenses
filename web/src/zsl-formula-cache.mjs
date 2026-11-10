@@ -30,7 +30,18 @@ export function refreshFormulaCaches(xmlBySheet,{targets}={}){
   if(!node)return 0; // Excel treats blank numeric references as zero
   const formula=own(node,'f');
   if(formula){
-   if(!formula.textContent?.trim())return asNumber(own(node,'v')?.textContent||0); // shared formula follower with old cache
+   // ZSL's foreign-meal conversion L74 is the master shared Excel formula,
+   // and L75:L107 have <f t="shared"/> with empty text. Excel knows their
+   // relative Jn/Kn expression; Quick Look only sees stale <v>=0.
+   if(!formula.textContent?.trim()){
+    const row=Number(ref.slice(1));
+    if(sheet==='s.4 - stravné zahr.'&&/^L\d+$/.test(ref)&&
+       row>=74&&row<=107&&formula.getAttribute('t')==='shared'){
+      const amount=fetch(sheet,'J'+row),rate=fetch(sheet,'K'+row);
+      return amount===null||rate===null||rate===0?null:round(amount/rate);
+    }
+    return asNumber(own(node,'v')?.textContent||0);
+   }
    const k=key(sheet,ref);
    if(memo.has(k))return memo.get(k);
    if(stack.has(k))return null;
@@ -138,7 +149,9 @@ export function refreshFormulaCaches(xmlBySheet,{targets}={}){
  const lookup=targets||[];
  for(const {sheet,cell} of lookup){
   const c=bySheet.get(sheet)?.get(cell),f=own(c,'f');
-  if(!f||!f.textContent?.trim())continue;
+  if(!f)continue;
+  const sharedForeignMeal=sheet==='s.4 - stravné zahr.'&&/^L(?:7[4-9]|[89]\d|10[0-7])$/.test(cell)&&f.getAttribute('t')==='shared';
+  if(!f.textContent?.trim()&&!sharedForeignMeal)continue;
   const resultValue=fetch(sheet,cell);
   if(resultValue===null){result.unsupported++;continue}
   const next=String(resultValue);
