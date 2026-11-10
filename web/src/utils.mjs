@@ -15,7 +15,7 @@ export function expenseStatus(e) {
   if (!e.receipt_path) return 'Chybí účtenka';
   if (!e.merchant || Number(e.amount) <= 0 || !['cash', 'card'].includes(e.payment_method)) return 'Doplnit údaje';
   if (e.payment_method === 'card' && !e.bank_path) return 'Chybí potvrzení';
-  if (e.ocr && e.ocr.reviewed === false) return 'Ověřit načtené údaje';
+  if (e.ocr && e.ocr.reviewed === false && !e.ocr.autoReady) return 'OCR potřebuje kontrolu';
   return 'Doklady kompletní';
 }
 export function summarize(expenses = [], funding = []) {
