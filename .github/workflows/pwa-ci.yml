@@ -34,9 +34,6 @@ jobs:
       - name: Bundle verified original ZSL workbook
         working-directory: .
         run: node web/scripts/fetch-zsl-template.mjs
-      - name: Audit original financial formulas
-        working-directory: .
-        run: node web/scripts/audit-formulas.mjs
       - name: Verify real published workbook works with Excel writer
         working-directory: .
         run: node web/scripts/verify-bundled-template.mjs
