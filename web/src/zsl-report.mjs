@@ -34,9 +34,10 @@ export const NOT_COMPUTED='NEVYPOČÍTANÉ';
 const CENT=value=>Math.round((Number(value)||0)*100);
 export const num2=value=>Math.round((Number(value)||0)*100)/100;
 function sumCents(list){return list.reduce((acc,item)=>acc+CENT(item.amount),0)/100}
-export function expenseSection(expense){
+export function expenseSection(expense,event){
   if(ZSL_EXPENSE_SECTIONS.some(x=>x.id===expense.zsl_section))return expense.zsl_section;
-  if(expense.category==='fuel')return 'unassigned'; // Never assume a vehicle owner.
+  if(expense.category==='fuel')
+    return ['zsl_car','private_car','company_car'].includes(event?.defaultFuelSection)?event.defaultFuelSection:'unassigned';
   if(expense.category==='lodging')return 'lodging';
   if(expense.category==='travel')return 'transport';
   return 'other';
@@ -44,7 +45,7 @@ export function expenseSection(expense){
 export function makeZslReport({event,trainer,riders=[],expenses=[],funding=[]}){
   const financial=summarize(expenses,funding);
   const sections=ZSL_EXPENSE_SECTIONS.map(section=>{
-    const entries=[...expenses].filter(e=>expenseSection(e)===section.id).sort((a,b)=>(a.spent_on||'').localeCompare(b.spent_on||''));
+    const entries=[...expenses].filter(e=>expenseSection(e,event)===section.id).sort((a,b)=>(a.spent_on||'').localeCompare(b.spent_on||''));
     return {...section,expenses:entries,total:sumCents(entries)};
   });
   const travel=sumCents(expenses.filter(x=>['travel','fuel'].includes(x.category)));
