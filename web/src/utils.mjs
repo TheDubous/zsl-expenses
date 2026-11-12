@@ -13,6 +13,7 @@ export function decimal(input) {
 }
 export function expenseStatus(e) {
   if (!e.receipt_path) return 'Chybí účtenka';
+  if (Number(e.sourceAmount)>0 && e.sourceCurrency && e.sourceCurrency!=='EUR' && (!e.conversionConfirmed || !(Number(e.amount)>0))) return 'Doplnit přepočet EUR';
   if (!e.merchant || Number(e.amount) <= 0 || !['cash', 'card'].includes(e.payment_method)) return 'Doplnit údaje';
   if (e.payment_method === 'card' && !e.bank_path) return 'Chybí potvrzení';
   if (e.ocr && e.ocr.reviewed === false && !e.ocr.autoReady) return 'OCR potřebuje kontrolu';
