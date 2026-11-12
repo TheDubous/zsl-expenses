@@ -13,18 +13,62 @@ const timeValue=s=>/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(s||''))?(Number(s.s
 const t=(sheet,cell,value)=>value==null||String(value).trim()===''?null:{sheet,cell,value:String(value),kind:'text'};
 const n=(sheet,cell,value)=>value==null||!Number.isFinite(Number(value))?null:{sheet,cell,value:Number(value),kind:'number'};
 const S1='s.1 - pokyn',S3='s.3 - výdavky',S4='s.4 - stravné zahr.',S6='s.6 - správa';
+// What was purchased, not where. Keep this short for ZSL's original
+// narrow description cells. Explicit user correction always wins.
+export function receiptItemLabel(expense={}){
+ const manual=String(expense.itemLabel||'').trim();
+ if(manual)return manual.slice(0,70);
+ const source=String([
+   expense.ocr?.rawText||'',expense.note||'',
+   expense.receipt_name||'',expense.merchant||''
+ ].join('\n')).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ const match=re=>re.test(source);
+ // Fuel can list multiple products at the same station. Prefer a single
+ // reliable receipt-level label; AdBlue is not silently called diesel.
+ if(expense.category==='fuel'||match(/\b(?:adblue|diesel|nafta|benz[iy]n|benzin|petrol|super\s*95|tankstelle|kraftstoff)\b/)){
+  const adblue=match(/\b(?:ad\s*blue|adblue|harnovina)\b/);
+  const diesel=match(/\b(?:diesel|nafta|gas[oó]leo|dizel)\b/);
+  const petrol=match(/\b(?:benz[iy]n|benzin|petrol|super\s*(?:95|98)|unleaded|bleifrei)\b/);
+  if([adblue,diesel,petrol].filter(Boolean).length>1)return 'PHM / AdBlue';
+  if(adblue)return 'AdBlue';
+  if(diesel)return 'Diesel';
+  if(petrol)return 'Benzín';
+  return 'PHM';
+ }
+ // Separate piste/track rental from lift passes and race entry fees.
+ if(match(/\b(?:startovn[eéy]|startovny|startovne|startgeld|nenngeld|entry\s*fee|registration\s*fee|race\s*fee|prihlasovac[iy]\s*poplatek)\b/))
+  return 'Startovné';
+ if(match(/\b(?:pren[aá]jem\s*(?:trate|trati|zjazdovky|sjezdovky)|piste[n]?\s*miete|streckenmiete|track\s*rental|slope\s*rental|pistenbenutzung|trainingspiste)\b/))
+  return 'Prenájom trate';
+ if(match(/\b(?:ski\s*pass|skipass|skipas|liftkarte|liftpass|skipasse|ski\s*ticket|seilbahnkarte|bergbahnticket)\b/))
+  return 'Skipas';
+ if(expense.category==='lodging')return 'Ubytovanie';
+ if(expense.category==='food'){
+  if(match(/\b(?:supermarket|potraviny|lebensmittel|interspar|hofer|lidl|billa|spar)\b/))return 'Potraviny';
+  return 'Strava';
+ }
+ if(expense.category==='travel'){
+  if(match(/\b(?:parkovn[eéy]|parking|parkgebuhr|parkplatz)\b/))return 'Parkovné';
+  if(match(/\b(?:myto|maut|toll|vignette|dialnicn[aá])\b/))return 'Mýto';
+  return 'Doprava';
+ }
+ if(expense.category==='resort')return 'Skipas'; // fallback for older scanned lift receipts
+ if(match(/\b(?:servis|service)\b/))return 'Servis';
+ return 'Ostatné výdavky';
+}
+export function zslReceiptDescription(expense){
+ const date=dateText(expense.spent_on);
+ return [date,receiptItemLabel(expense)].filter(Boolean).join(' – ');
+}
 export function recommendedZslSection(expense,event){
-  // Ownership of a vehicle and eligibility of a meal allowance cannot be
-  // deduced solely from OCR; these items require a one-time human selection.
+  // ZSL owns the vehicle for all fuel, diesel, petrol and AdBlue receipts.
+  // This also migrates old receipts that stored a private/car-choice section.
+  if(expense.category==='fuel')return 'zsl_car';
   if(expense.zsl_section)return expense.zsl_section;
-  if(expense.category==='fuel'){
-    return ['zsl_car','private_car','company_car'].includes(event?.defaultFuelSection)
-      ?event.defaultFuelSection:'unassigned';
-  }
   if(expense.category==='food')return 'unassigned';
   if(expense.category==='lodging')return 'lodging';
   if(expense.category==='travel')return 'transport';
-  return 'other'; // Resort fees, parking and other actual receipts.
+  return 'other';
 }
 export function exportExpenseReadiness(expense,event){
   const issues=[],warnings=[],section=recommendedZslSection(expense,event);
@@ -39,16 +83,13 @@ export function exportExpenseReadiness(expense,event){
     warnings.push('způsob platby zatím není určen');
   if(event?.currency!=='EUR')issues.push('není zadán bezpečný přepočet z '+(event?.currency||'jiné měny')+' do EUR');
   if(section==='unassigned'){
-    if(expense.category==='fuel')issues.push('vyber typ vozidla (ZSL / soukromé / právnické osoby)');
-    else if(expense.category==='food')issues.push('vyber zahraniční stravování nebo jinou sekci formuláře');
+    if(expense.category==='food')issues.push('vyber zahraniční stravování nebo jinou sekci formuláře');
     else issues.push('vyber sekci formuláře ZSL');
   }
-  if(section==='private_car'||section==='company_car')
-    issues.push('chybí podklady pro výpočet náhrady: ujeté km, spotřeba a cena PHM');
   if(section==='domestic_meal')
     issues.push('tuzemské stravné vyžaduje samostatné podklady pro výpočet nároku');
   if(!['transport','zsl_car','lodging','other','foreign_meal'].includes(section)&&section!=='unassigned'&&
-     section!=='private_car'&&section!=='company_car'&&section!=='domestic_meal')
+     section!=='domestic_meal')
     issues.push('neznámá sekce výkazu');
   return {name,section,issues,warnings,canExport:issues.length===0};
 }
@@ -109,14 +150,14 @@ export function buildTemplatePatches({event,trainer,riders=[],expenses=[],fundin
   if(row==null){skipped.push(name+': v sekcii '+section+' nie sú voľné riadky.');continue;}
   for(const col of cfg.cols)taken.add(col+row);
   const amount=rounded(e.amount),cells=[];
-  if(section==='transport')cells.push(t(S3,'C'+row,name),t(S3,'D'+row,e.note||'Iná miestna doprava'),n(S3,'I'+row,amount));
+  if(section==='transport')cells.push(t(S3,'C'+row,zslReceiptDescription(e)),t(S3,'D'+row,name),n(S3,'I'+row,amount));
   else if(section==='zsl_car'){
-   const info=[e.vehicleDetails||event?.vehicleDetails||'',name,dateText(e.spent_on)].filter(Boolean).join(' – ');
+   const info=zslReceiptDescription(e);
    cells.push(t(S3,'C'+row,info),n(S3,'F'+row,amount),n(S3,'H'+row,amount));
   }else if(section==='lodging'||section==='other'){
-   cells.push(t(S3,'C'+row,e.note?name+' – '+e.note:name),n(S3,'F'+row,amount),n(S3,'H'+row,amount));
+   cells.push(t(S3,'C'+row,zslReceiptDescription(e)),n(S3,'F'+row,amount),n(S3,'H'+row,amount));
   }else if(section==='foreign_meal'){
-   cells.push(n(S4,'B'+row,excelDateSerial(e.spent_on)),t(S4,'C'+row,'Pokladničný doklad zo strav. zariadenia'),t(S4,'F'+row,name),t(S4,'I'+row,'EUR'),n(S4,'J'+row,amount));
+   cells.push(n(S4,'B'+row,excelDateSerial(e.spent_on)),t(S4,'C'+row,'Pokladničný doklad zo strav. zariadenia'),t(S4,'F'+row,receiptItemLabel(e)),t(S4,'I'+row,'EUR'),n(S4,'J'+row,amount));
   }
   cells.filter(Boolean).forEach(p=>add({...p,group:'receipt:'+e.id,rowStart:cfg.start,rowEnd:cfg.end}));
  }
