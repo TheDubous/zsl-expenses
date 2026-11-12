@@ -258,6 +258,8 @@ test('receipt item label classifies specific products with manual correction as 
  assert.equal(receiptItemLabel(line('Super 95 Benzin','fuel')),'Benzín');
  assert.equal(receiptItemLabel(line('STARTGELD')),'Startovné');
  assert.equal(receiptItemLabel(line('Streckenmiete')),'Prenájom trate');
+ assert.equal(receiptItemLabel(line('Pronájem trati')),'Prenájom trate');
+ assert.equal(receiptItemLabel(line('Skipasy')),'Skipas');
  assert.equal(receiptItemLabel(line('SKIPASS')),'Skipas');
  assert.equal(receiptItemLabel({...line('SKIPASS'),itemLabel:'Skipas – 3 dni'}),'Skipas – 3 dni');
  assert.equal(zslReceiptDescription({...line('SKIPASS'),itemLabel:'Startovné'}),'03.11.26 – Startovné');
