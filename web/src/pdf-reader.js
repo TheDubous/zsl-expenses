@@ -33,16 +33,17 @@ async function renderAsBlob(page){
   return await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Nelze připravit stránku PDF k OCR.')),'image/png'));
  }finally{canvas.width=canvas.height=1}
 }
+export async function openPdfEngine(){
+ const pkg=await import('pdfjs-dist/legacy/build/pdf.mjs');
+ const worker=await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url');
+ pkg.GlobalWorkerOptions.workerSrc=worker.default;
+ return pkg;
+}
 export async function recognizePdf(file,{onProgress=()=>{},mode='precise',pdfEngine=null,ocrSessionFactory=null}={}){
  if(!isPdf(file))throw new Error('Soubor není PDF.');
  onProgress('Otevírám PDF a vyhledávám text všech stran…');
  let engine=pdfEngine;
- if(!engine){
-  const pkg=await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const worker=await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url');
-  pkg.GlobalWorkerOptions.workerSrc=worker.default;
-  engine=pkg;
- }
+ if(!engine)engine=await openPdfEngine();
  const task=engine.getDocument({data:new Uint8Array(await file.arrayBuffer()),useSystemFonts:true});
  let pdf,worker;
  try{
