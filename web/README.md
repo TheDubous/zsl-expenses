@@ -1,5 +1,19 @@
 # ZSL Expenses · Lokální PWA (bez databázového serveru)
 
+## v0.9.2 – automatické čtení PDF účtenek a vlakových jízdenek
+
+Aplikace už **neukládá všechny PDF automaticky s částkou 0**. Nově se PDF v telefonu zpracuje přes pdf.js: otevře všechny stránky, přečte jejich existující textové vrstvy, vyhledá daňový doklad a vyhodnotí skutečný konečný součet. Pokud je PDF pouze skenem, použije OCR vykreslených stránek. Na PDF už je možné kliknout **Přečíst znovu**, a to i po dřívějším uložení bez výsledku. Pokud extrakce selže, chyba se zobrazí u dokladu.
+
+**Příklad T204248431.pdf (České dráhy):** 3 stránky – mezinárodní jízdenka 971 Kč, rezervace 498 Kč, závěrečný daňový doklad **Celkem 1 469 Kč**. Přečíst se má dodavatel České dráhy, datum platby 31. 10. 2026, platba kartou a položka Vlaková jízdenka + rezervace. Stránky se **neduplikují v účtech** a součet Kč se **nesčítá s informativními cenami 39 + 20 EUR**.
+
+**Bezpečnost měny:** ZSL Excel vyžaduje EUR. U zdrojového PDF v CZK/CHF se rozpoznaná originální částka uloží zvlášť a uvidíš ji v seznamu výdajů i editoru. Dokud nedoplníš **reálně přepočtenou částku v EUR**, položka se neobjeví v eurových součtech a její export do ZSL se zablokuje s jasným důvodem. Aplikace **nevymýšlí kurz** ani z částky 1 469 Kč nedělá 1 469 EUR. Původní cena a přepočtená částka jsou uchovány samostatně v CSV, PDF přílohách a ZIP záloze. Stejné pravidlo platí pro PDF s více měnami.
+
+**PDF přílohy s omezením kopírování:** některé originální vlakové/letecké PDF nelze přímo vložit přes pdf-lib. Při takovém omezení se jednotlivé stránky vykreslí lokálně do přiloženého souhrnného PDF jako obrázky; původní PDF zůstává nedotčené ve složce zálohy.
+
+Na iPhonu zůstává vše v IndexedDB. PDF text se načítá přímo na zařízení, bez cloudového odesílání. Úplné zpracování konkrétního omezeného PDF a kvalita fallback skenu musí být ověřeny i na fyzickém iPhonu.
+
+---
+
 ## v0.9.1 – datum a stručný název položky v ZSL
 
 - Původní excelový formulář se **nepřestavuje**. Ve vstupním popisovém poli původního listu **s.3 – výdavky** se zapisuje stručná položka s datem přímo vedle finančních údajů, například **`03.11.26 – Diesel`**, **`03.11.26 – AdBlue`**, **`03.11.26 – Skipas`**, **`03.11.26 – Startovné`** nebo **`03.11.26 – Prenájom trate`**. V části zahraniční stravy zůstává datum v původní datumové buňce a stručná položka v popisovém poli.
