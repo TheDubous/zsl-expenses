@@ -63,4 +63,6 @@ test('race entry fee, slope rental and AdBlue classify to right broad expense gr
  assert.equal(parseReceiptText('STARTGELD / Startovne 90,00 EUR').category,'resort');
  assert.equal(parseReceiptText('Streckenmiete 300,00 EUR').category,'resort');
  assert.equal(parseReceiptText('AD BLUE 45,00 EUR').category,'fuel');
+ assert.equal(parseReceiptText('Pronájem trati 300,00 EUR').category,'resort');
+ assert.equal(parseReceiptText('Skipasy 100,00 EUR').category,'resort');
 });
