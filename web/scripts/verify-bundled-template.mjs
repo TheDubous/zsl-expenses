@@ -56,6 +56,11 @@ const dateCell=await contentAt('sheet1.xml','B12');
 if(Math.abs(Number(dateCell.value)-46335)>30||!Number.isFinite(Number(dateCell.value)))
  throw Error('Original trip departure date was not stored as Excel serial number.');
 console.log('Formula-cache audit passed:',JSON.stringify({cached:result.formulaCache.updated,unsupported:result.formulaCache.unsupported}));
+const firstExpenseDescription=await contentAt('sheet3.xml','C26');
+if(!String((await values.file('xl/worksheets/sheet3.xml').async('string'))).includes('Diesel')||
+   !result.changes.some(x=>x.cell==='C26'&&/^09\.11\.26 – Diesel$/.test(String(x.value))))
+ throw Error('Real official ZSL C26 must show receipt date and short purchased item Diesel, not vendor Gutmann.');
+
 if(!result.integrity||result.integrity.preservedFormulas<50||result.integrity.preservedStyles<500)
  throw Error('ZSL original formula or style integrity audit failed: '+JSON.stringify(result.integrity));
 const department=await contentAt('sheet1.xml','G6');
