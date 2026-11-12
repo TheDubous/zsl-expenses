@@ -60,10 +60,10 @@ export async function importBackup(file){
 }
 export async function exportEvent(event,expenses,funding){
   const zip=new JSZip(),folder=zip.folder('Doklady');
-  const rows=[['ID','Datum','Polozka','Dodavatel','Castka','Mena','Kategorie','Sekce ZSL podle s.3','Vozidlo / ECV','Zpusob platby','Doklady']];
+  const rows=[['ID','Datum','Polozka','Dodavatel','Castka pro ZSL','Mena ZSL','Puvodni castka','Puvodni mena','Prepocteno do EUR','Kategorie','Sekce ZSL podle s.3','Vozidlo / ECV','Zpusob platby','Doklady']];
   for(const [index,e] of expenses.entries()){
     const dir=folder.folder(String(index+1).padStart(3,'0')+'_'+safeFilename(e.merchant||e.receipt_name||'vydaj'));
-    rows.push([e.id,e.spent_on,receiptItemLabel(e),e.merchant,e.amount,event.currency,CATEGORIES.find(c=>c.id===e.category)?.label||'Ostatní',
+    rows.push([e.id,e.spent_on,receiptItemLabel(e),e.merchant,e.amount,event.currency,e.sourceAmount||'',e.sourceCurrency||'',e.conversionConfirmed?'ANO':'NE',CATEGORIES.find(c=>c.id===e.category)?.label||'Ostatní',
       ZSL_EXPENSE_SECTIONS.find(x=>x.id===expenseSection(e,event))?.label||'NEZARADENÉ',e.vehicleDetails||'',e.payment_method,expenseStatus(e)]);
     for(const f of [
       {id:e.receipt_path,prefix:'Uctenka',name:e.receipt_name},
