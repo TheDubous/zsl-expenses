@@ -64,9 +64,9 @@ export async function recognizePdf(file,{onProgress=()=>{},mode='precise',pdfEng
   // usable text / amount. A PDF may contain both searchable and scanned pages.
   if((!result.sourceAmount||!result.sourceCurrency)&&needsRendering.length){
    onProgress('PDF obsahuje obrázkové stránky, spouštím doplňkové OCR…');
-   const factory=ocrSessionFactory||async callback=>{
+   const factory=ocrSessionFactory||(async callback=>{
     const {createOCRSession}=await import('./ocr.js');return createOCRSession(callback);
-   };
+   });
    worker=await factory(onProgress);
    const scanned=[];
    for(const [i,number] of needsRendering.slice(0,6).entries()){
