@@ -31,11 +31,12 @@ test('ZSL rollup totals are computed but allowances stay unknown',()=>{
  }
  assert.equal(NOT_COMPUTED,'NEVYPOČÍTANÉ');
 });
-test('fuel is not assigned to ZSL-owned vehicle unless selected',()=>{
- assert.equal(expenseSection(expenses[0]),'unassigned');
- assert.equal(expenseSection({...expenses[0],zsl_section:'zsl_car'}),'zsl_car');
+test('all fuel is assigned to ZSL-owned vehicle automatically, including historical section overrides',()=>{
+ assert.equal(expenseSection(expenses[0]),'zsl_car');
+ assert.equal(expenseSection({...expenses[0],zsl_section:'private_car'}),'zsl_car');
  const r=makeZslReport({event,trainer,expenses, funding:[]});
- assert.equal(r.sections.find(x=>x.id==='unassigned').expenses.length,4);
+ assert.equal(r.sections.find(x=>x.id==='zsl_car').expenses.length,3);
+ assert.equal(r.sections.find(x=>x.id==='unassigned').expenses.length,1);
  assert.ok(r.missing.some(x=>/Zařazení paliva nebo stravy/.test(x)));
 });
 test('missing receipts and unverified card payments are listed in report',()=>{
