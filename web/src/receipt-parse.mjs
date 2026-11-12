@@ -130,7 +130,7 @@ function merchantSuggestions(lines){
 }
 function categoryOf(text){
   if(/\b(adblue|diesel|nafta|benz[ií]n|benzin|kraftstoff|fuel|tankovanie|tankstelle|čerpac[íi]|phm)\b/i.test(text))return 'fuel';
-  if(/\b(skipass|ski\s*pass|skipas|piste|pista|lanovka|gletscherbahn|liftkarte|liftpass|bergbahn|rennstrecke)\b/i.test(text))return 'resort';
+  if(/\b(skipass|ski\s*pass|skipas|piste|pista|lanovka|gletscherbahn|liftkarte|liftpass|bergbahn|rennstrecke|startovn[eé]|startgeld|nenngeld|streckenmiete|pistenmiete|pren[aá]jem\s*trat[iěe])\b/i.test(text))return 'resort';
   if(/\b(hotel|pension|pensi[oó]n|ubytov|zimmer|unterkunft|booking)\b/i.test(text))return 'lodging';
   if(/\b(restaur|restaurant|grocery|market|interspar|spar|lidl|hofer|billa|potravin|supermarket|bistro|strava)\b/i.test(text))return 'food';
   if(/\b(taxi|vlak|train|autobus|bus|ticket|mýto|m[yý]to|parking|parkovn|dálni[cč]ní|vignette)\b/i.test(text))return 'travel';
