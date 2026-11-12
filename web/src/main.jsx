@@ -542,7 +542,9 @@ function App(){
               <span>Možní dodavatelé:</span>
               {editing.ocr.merchantCandidates.slice(0,4).map(c=><button key={c.name} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('merchant');if(inp)inp.value=c.name}}>{c.name}</button>)}
             </div>}
-            {(editing.ocr.amountCandidates||[]).length>0&&<div className="ocr-candidates">Rozpoznané částky: {editing.ocr.amountCandidates.map(c=><button key={c.amount} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,active?.currency||'EUR')}</button>)}</div>}
+            {(editing.ocr.amountCandidates||[]).length>0&&<div className="ocr-candidates">Rozpoznané částky: {editing.ocr.amountCandidates.map((c,i)=>c.currency&&c.currency!==(active?.currency||'EUR')?
+              <span className="muted smalltext" key={i}>{currency(c.amount,c.currency)} (cizí měna – nelze vložit jako EUR)</span>:
+              <button key={i} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,c.currency||active?.currency||'EUR')}</button>)}</div>}
             <details><summary>Zobrazit rozpoznaný text ({(editing.ocr.scannedPasses||[]).length||1} průchody)</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
           </div>}
           <p className="muted smalltext">Bankovní potvrzení můžeš přiložit později v seznamu dokladů. Změna způsobu platby z karty odstraní původní bankovní přílohu.</p>
