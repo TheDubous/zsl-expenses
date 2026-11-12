@@ -63,15 +63,18 @@ export async function recognizePdf(file,{onProgress=()=>{},mode='precise',pdfEng
   let result=parsePdfReceiptPages(pages);
   // Digital PDFs need no image OCR. Only rasterize when there is truly no
   // usable text / amount. A PDF may contain both searchable and scanned pages.
-  if((!result.sourceAmount||!result.sourceCurrency)&&needsRendering.length){
-   onProgress('PDF obsahuje obrázkové stránky, spouštím doplňkové OCR…');
+  if(!result.sourceAmount||!result.sourceCurrency){
+   const targets=needsRendering.length?needsRendering:
+     (pdf.numPages===1?[1]:[pdf.numPages,1]);
+   onProgress(needsRendering.length?'PDF obsahuje obrázkové stránky, spouštím doplňkové OCR…':
+     'PDF nemá jistě určenou částku nebo měnu. Zkouším kontrolní OCR důležitých stran…');
    const factory=ocrSessionFactory||(async callback=>{
     const {createOCRSession}=await import('./ocr.js');return createOCRSession(callback);
    });
    worker=await factory(onProgress);
    const scanned=[];
-   for(const [i,number] of needsRendering.slice(0,6).entries()){
-    onProgress('Rozpoznávám sken PDF – strana '+number+' ('+(i+1)+'/'+Math.min(6,needsRendering.length)+')');
+   for(const [i,number] of targets.slice(0,6).entries()){
+    onProgress('Rozpoznávám sken PDF – strana '+number+' ('+(i+1)+'/'+Math.min(6,targets.length)+')');
     try{
      const page=await pdf.getPage(number);
      const img=await renderAsBlob(page);
