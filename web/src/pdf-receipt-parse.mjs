@@ -3,13 +3,13 @@ import {parseReceiptText} from './receipt-parse.mjs';
 // PDF tickets and their final tax invoice frequently repeat a price.
 // We only select a final total, never add all displayed amounts.
 const TOTAL=/\b(celkem|spolu|celkov[aá]\s*cena|k\s*uhrad[eě]|total|gesamtbetrag|endbetrag|summe)\s*[:\-]?\s*(\d{1,3}(?:[ \u00a0]\d{3})+|\d{1,8})(?:[.,](\d{2}))?\s*(K[čc]|CZK|EUR|EURO|€|CHF)?/i;
-const PRICE=/\b(?:Cena|Price|Kone[cč]n[aá]\s*cena)\s*[:\-]?\s*(\d{1,3}(?:[ \u00a0]\d{3})+|\d{1,8})(?:[.,](\d{2}))?\s*(K[čc]|CZK|EUR|EURO|€|CHF)\b/gi;
+const PRICE=/\b(?:Cena|Price|Kone[cč]n[aá]\s*cena)\s*[:\-]?\s*(\d{1,3}(?:[ \u00a0]\d{3})+|\d{1,8})(?:[.,](\d{2}))?\s*(K[čc]|CZK|EUR|EURO|€|CHF)(?=$|[^A-Za-z])/gi;
 function price(number,decimal){
  const n=Number(String(number||'').replace(/[ \u00a0]/g,'')+'.'+String(decimal||'00'));
  return Number.isFinite(n)&&n>0&&n<1e7?Math.round(n*100)/100:null;
 }
 function unit(text){
- if(/(?:\bCZK\b|\bK[Čč]\b)/i.test(text||''))return 'CZK';
+ if(/(?:\bCZK\b|(?:^|[^A-Za-z])K[Čč](?=$|[^A-Za-z]))/i.test(text||''))return 'CZK';
  if(/(?:\bEUR\b|\bEURO\b|€)/i.test(text||''))return 'EUR';
  if(/\bCHF\b/i.test(text||''))return 'CHF';
  return null;
