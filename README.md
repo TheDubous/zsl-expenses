@@ -1,5 +1,7 @@
 # ZSL Expenses
 
+**v0.9.1:** datum a krátká rozpoznaná položka (Diesel, AdBlue, Skipas, Startovné, Prenájom trate) v původním ZSL Excelu; všechno palivo se automaticky řadí do Motorové vozidlo ZSL bez výběru vozidla. [Více informací](./web/README.md).
+
 **v0.9:** Původní formát ZSL zachovaný, bezpečné obnovování hodnot finančních vzorců pro náhled, Excel automaticky dopočítá úplné vzorce, reálná excelová data, žádné schvalovací role, jednorázové nastavení vozidla a automatické rozpoznání jistých účtenek. [Návod a limity](./web/README.md).
 
 **v0.8.1:** Opravený finanční export do skutečné ZSL šablony: správné řádky oficiální i vlastní verze, bankovní potvrzení není blokací účetní částky, průběžná kontrola všech účtenek a ochrana proti vytvoření výkazu s nulou zaúčtovaných výdajů. [Návod a kontrolní testy](./web/README.md).

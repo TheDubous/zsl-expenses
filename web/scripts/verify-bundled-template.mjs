@@ -15,7 +15,7 @@ const data={
  trainer:{name:'TEST TRAINER',role:'Trener',department:'Sekcia modernych disciplin',address:'Test',contact:'000000',iban:'SK0000000000000000000000'},
  riders:[],funding:[],expenses:[
   {id:'fuel-1',category:'fuel',zsl_section:'zsl_car',merchant:'Gutmann GmbH',amount:127.78,
-   receipt_path:'receipt1',spent_on:'2026-11-09',payment_method:'card',bank_path:null,ocr:{reviewed:true}},
+   receipt_path:'receipt1',spent_on:'2026-11-09',payment_method:'card',bank_path:null,ocr:{reviewed:true,rawText:'DIESEL 58,24 L 127,78 EUR'}},
   {id:'skipass-1',category:'resort',merchant:'Pitztaler Gletscherbahn',amount:650,
    receipt_path:'receipt2',spent_on:'2026-11-09',payment_method:'card',bank_path:null,ocr:{reviewed:true}},
   {id:'hotel-1',category:'lodging',merchant:'Hotel Test',amount:315,
@@ -56,6 +56,11 @@ const dateCell=await contentAt('sheet1.xml','B12');
 if(Math.abs(Number(dateCell.value)-46335)>30||!Number.isFinite(Number(dateCell.value)))
  throw Error('Original trip departure date was not stored as Excel serial number.');
 console.log('Formula-cache audit passed:',JSON.stringify({cached:result.formulaCache.updated,unsupported:result.formulaCache.unsupported}));
+// No private image in CI: this is a synthetic OCR text fixture representing diesel.
+if(!String((await values.file('xl/worksheets/sheet3.xml').async('string'))).includes('Diesel')||
+   !result.changes.some(x=>x.cell==='C26'&&/^09\.11\.26 – Diesel$/.test(String(x.value))))
+ throw Error('Real official ZSL C26 must show receipt date and short purchased item Diesel, not vendor Gutmann.');
+
 if(!result.integrity||result.integrity.preservedFormulas<50||result.integrity.preservedStyles<500)
  throw Error('ZSL original formula or style integrity audit failed: '+JSON.stringify(result.integrity));
 const department=await contentAt('sheet1.xml','G6');

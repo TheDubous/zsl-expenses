@@ -9,7 +9,7 @@ import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
-import {exportExpenseReadiness} from './zsl-template-map.mjs';
+import {exportExpenseReadiness,receiptItemLabel} from './zsl-template-map.mjs';
 import {storeOriginalTemplate,getTemplateInfo,ensureBundledZslTemplate,downloadFilledOriginal} from './zsl-xlsx.js';
 import {downloadAttachmentsPdf} from './attachments-pdf.js';
 import './style.css';
@@ -108,7 +108,7 @@ function App(){
     await run(async()=>{
       const idEvent=uid();
       await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
-        defaultFuelSection:String(f.get('defaultFuelSection')||'unassigned'),
+        defaultFuelSection:'zsl_car',
         vehicleDetails:String(f.get('vehicleDetails')||'').trim(),startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),advanceNumber:String(f.get('advanceNumber')||''),reportText:String(f.get('reportText')||''),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
       if(advance>0)await putOne('funding',{id:uid(),eventId:idEvent,kind:'advance',amount:advance,occurredOn:today(),note:'Počáteční záloha',createdAt:new Date().toISOString()});
       setActiveId(idEvent);setNewEvent(false);setView('overview');setNotice('Akce byla vytvořena a uložena do telefonu.');
@@ -147,7 +147,7 @@ function App(){
         startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),
         endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),
         location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
-        defaultFuelSection:String(f.get('defaultFuelSection')||'unassigned'),
+        defaultFuelSection:'zsl_car',
         vehicleDetails:String(f.get('vehicleDetails')||'').trim(),
         advanceNumber:String(f.get('advanceNumber')||''),reportText:String(f.get('reportText')||'')
       });
@@ -224,7 +224,7 @@ function App(){
     if(!Number.isFinite(val)||val<0){setError('Neplatná částka výdaje.');return}
     await run(async()=>{
       await saveExpense({...editing,merchant:String(f.get('merchant')||'').trim(),spent_on:f.get('spentOn')||'',amount:val,category:f.get('category'),payment_method:f.get('method'),zsl_section:f.get('zslSection')==='auto'?'':String(f.get('zslSection')||''),
-      vehicleDetails:String(f.get('vehicleDetails')||'').trim(),note:String(f.get('note')||''),ocr:editing.ocr?{...editing.ocr,reviewed:true}:undefined});
+      vehicleDetails:String(f.get('vehicleDetails')||'').trim(),itemLabel:String(f.get('itemLabel')||'').trim().slice(0,70),note:String(f.get('note')||''),ocr:editing.ocr?{...editing.ocr,reviewed:true}:undefined});
       setEditing(null);setNotice('Údaje účtenky uložené.');
     })
   }
@@ -348,7 +348,7 @@ function App(){
   function Documents(){
     return <div className="stack">
       <div className="panel"><div className="heading"><h3>1. Nahraj účtenky</h3><Camera size={20}/></div>
-        <p className="muted">Aplikace se pokusí přečíst částku, dodavatele a datum. <strong>Důkladný režim</strong> čte účtenku několikrát a zvlášť analyzuje její horní část. Je pomalejší, ale může zlepšit rozpoznání špatně vytištěných dokladů. Výsledky vždy zkontroluj.</p>
+        <p className="muted">Aplikace se pokusí přečíst částku, dodavatele, datum a stručnou položku (Diesel, AdBlue, Skipas, Startovné…). <strong>Důkladný režim</strong> čte účtenku několikrát a zvlášť analyzuje její horní část. Je pomalejší, ale může zlepšit rozpoznání špatně vytištěných dokladů. Výsledky vždy zkontroluj.</p>
         <div className="ocr-mode-picker">
           <label htmlFor="ocr-mode">Způsob rozpoznávání</label>
           <select id="ocr-mode" value={ocrMode} disabled={busy} onChange={e=>setOcrMode(e.target.value)}>
@@ -369,7 +369,7 @@ function App(){
       <div className="heading"><h3>Účtenky</h3><span className="muted">{expenses.length} dokladů</span></div>
       {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
       {expenses.map(e=><div className="expense" key={e.id}>
-        <div className="expense-top"><div><strong>{e.merchant||e.receipt_name||'Doklad'}</strong><small>{showDate(e.spent_on)} · {CATEGORIES.find(c=>c.id===e.category)?.label||'Ostatní'}</small></div><b>{currency(e.amount,active.currency)}</b></div>
+        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{currency(e.amount,active.currency)}</b></div>
         <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed&&!e.ocr.autoReady} ok={!!e.ocr.reviewed||!!e.ocr.autoReady}>{e.ocr.reviewed?'Ručně upraveno':e.ocr.autoReady?'Automaticky načteno':'Zkontrolovat OCR ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
           <Button small secondary onClick={()=>setEditing(e)}>Upravit</Button>
@@ -481,12 +481,7 @@ function App(){
           <Input label="Účel cesty" name="purpose" placeholder="Tréning SBX / preteky"/>
           <div className="two-col"><Input label="Miesto odchodu" name="startPlace"/><Input label="Čas odchodu" name="startTime" type="time"/></div>
           <div className="two-col"><Input label="Miesto návratu" name="endPlace"/><Input label="Čas návratu" name="endTime" type="time"/></div>
-          <Select label="Typ auta pro tankování (nastavit jednou)" name="defaultFuelSection">
-            <option value="unassigned">Vyberu podle konkrétní účtenky</option>
-            <option value="zsl_car">Motorové vozidlo ZSL</option>
-            <option value="private_car">Súkromné vozidlo – potřeba km a spotřeba</option>
-            <option value="company_car">Vozidlo právnickej osoby – potřeba km a spotřeba</option>
-          </Select>
+          <p className="muted smalltext">Benzín, diesel a AdBlue se automaticky zapisují jako <strong>Motorové vozidlo ZSL</strong>.</p>
           <Input label="Značka vozidla a EČV (volitelné)" name="vehicleDetails" placeholder="Renault Trafic · AA-619RJ"/>
           <Input label="Číslo zálohy (volitelné)" name="advanceNumber"/>
           <label className="input-label"><span>SPRÁVA Z PRACOVNEJ CESTY (volitelné)</span><textarea name="reportText" rows="4" placeholder="Shrnutí průběhu soustředění nebo závodů…"/></label>
@@ -507,12 +502,7 @@ function App(){
           <Input name="purpose" label="Účel cesty" defaultValue={active.purpose||''}/>
           <div className="two-col"><Input name="startPlace" label="Miesto odchodu" defaultValue={active.startPlace||''}/><Input name="startTime" type="time" label="Čas odchodu" defaultValue={active.startTime||''}/></div>
           <div className="two-col"><Input name="endPlace" label="Miesto návratu" defaultValue={active.endPlace||''}/><Input name="endTime" type="time" label="Čas návratu" defaultValue={active.endTime||''}/></div>
-          <Select label="Typ auta pro tankování – výchozí pro tuto cestu" name="defaultFuelSection" defaultValue={active.defaultFuelSection||'unassigned'}>
-            <option value="unassigned">Určím u každé účtenky</option>
-            <option value="zsl_car">Motorové vozidlo ZSL</option>
-            <option value="private_car">Súkromné vozidlo (vyžaduje km a spotřebu)</option>
-            <option value="company_car">Vozidlo právnickej osoby (vyžaduje km a spotřebu)</option>
-          </Select>
+          <p className="muted smalltext">Veškeré tankování a AdBlue patří automaticky do <strong>Motorové vozidlo ZSL</strong>.</p>
           <Input name="vehicleDetails" label="Značka vozidla a EČV" defaultValue={active.vehicleDetails||''}/>
           <Input name="advanceNumber" label="Číslo zálohy" defaultValue={active.advanceNumber||''}/>
           <label className="input-label"><span>SPRÁVA Z PRACOVNEJ CESTY (s.6 - správa)</span><textarea name="reportText" rows="5" defaultValue={active.reportText||''} placeholder="Průběh, trénink, závody, výsledky a zhodnocení cesty…"/></label>
@@ -531,14 +521,15 @@ function App(){
           <div className="two-col"><Input label="Datum" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label="Částka" name="amount" defaultValue={String(editing.amount||'')} inputMode="decimal" required/></div>
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
-          <Select label="Zaradenie výdavku do originálu ZSL (nutné pro export)" name="zslSection" defaultValue={editing.zsl_section||'auto'}>
-            <option value="auto">Automaticky podle kategorie a typu auta nastaveného pro akci</option>
-            {ZSL_EXPENSE_SECTIONS.filter(section=>section.id!=='unassigned').map(section=><option key={section.id} value={section.id}>{section.label}</option>)}
-            <option value="foreign_meal">s.4 - stravné zahr. – pokladničný doklad zo strav. zariadenia</option>
-            <option value="domestic_meal">s.4 - stravné tuzem. – zatím vyžaduje ručné doplnenie</option>
-            <option value="unassigned">NEZARADENÉ - vyžaduje kontrolu</option>
+          <Select label="Zařazení do originálu ZSL (palivo vždy vozidlo ZSL)" name="zslSection"
+            defaultValue={editing.category==='fuel'?'auto':(editing.zsl_section||'auto')}>
+            <option value="auto">Automaticky podle druhu účtenky</option>
+            {ZSL_EXPENSE_SECTIONS.filter(section=>!['unassigned','private_car','company_car','zsl_car'].includes(section.id)).map(section=><option key={section.id} value={section.id}>{section.label}</option>)}
+            <option value="unassigned">Zatím nezařazeno</option>
           </Select>
           <Input label="Továrenská značka vozidla, EČV vozidla (pokud se týká paliva)" name="vehicleDetails" defaultValue={editing.vehicleDetails||''} placeholder="Např. Renault Trafic / AA-619RJ"/>
+          <Input label="Položka pro ZSL Excel (stručně)" name="itemLabel" defaultValue={editing.itemLabel||receiptItemLabel(editing)} placeholder="Např. Diesel, AdBlue, Skipas, Startovné"/>
+          <p className="muted smalltext">Do tabulky se zapíše datum, tato položka a částka. Název se navrhne z účtenky, ale můžeš jej přepsat.</p>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
           {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>{editing.ocr.receiptCropDetected&&<p className="muted smalltext">Úzká účtenka byla před čtením automaticky izolována a zvětšena.</p>}
             <p>Vysoká jistota OCR nevyžaduje další schvalování. Pokud je částka nebo dodavatel nesprávný, oprav údaj zde. Originální doklad zůstává uložený.</p>

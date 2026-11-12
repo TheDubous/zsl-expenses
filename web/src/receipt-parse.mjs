@@ -129,8 +129,8 @@ function merchantSuggestions(lines){
   return [...unique.values()].sort((a,b)=>b.score-a.score).slice(0,6);
 }
 function categoryOf(text){
-  if(/\b(adblue|diesel|nafta|benz[ií]n|benzin|kraftstoff|fuel|tankovanie|tankstelle|čerpac[íi]|phm)\b/i.test(text))return 'fuel';
-  if(/\b(skipass|ski\s*pass|skipas|piste|pista|lanovka|gletscherbahn|liftkarte|liftpass|bergbahn|rennstrecke)\b/i.test(text))return 'resort';
+  if(/\b(ad\s*blue|adblue|diesel|nafta|benz[ií]n|benzin|kraftstoff|fuel|tankovanie|tankstelle|čerpac[íi]|phm|super\s*95|super\s*98)\b/i.test(text))return 'fuel';
+  if(/\b(skipass|ski\s*pass|skipasy|skipassy|skipas|piste|pista|lanovka|gletscherbahn|liftkarte|liftpass|bergbahn|rennstrecke|startovn[eé]|startgeld|nenngeld|streckenmiete|pistenmiete|(?:pron[aá]jem|pren[aá]jem|pren[aá]jom)\s*trat[iěe])\b/i.test(text))return 'resort';
   if(/\b(hotel|pension|pensi[oó]n|ubytov|zimmer|unterkunft|booking)\b/i.test(text))return 'lodging';
   if(/\b(restaur|restaurant|grocery|market|interspar|spar|lidl|hofer|billa|potravin|supermarket|bistro|strava)\b/i.test(text))return 'food';
   if(/\b(taxi|vlak|train|autobus|bus|ticket|mýto|m[yý]to|parking|parkovn|dálni[cč]ní|vignette)\b/i.test(text))return 'travel';

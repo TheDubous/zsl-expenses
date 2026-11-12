@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 import {DOMParser,XMLSerializer} from '@xmldom/xmldom';
-import {REQUIRED_SHEETS,buildTemplatePatches,exportExpenseReadiness,recommendedZslSection} from '../src/zsl-template-map.mjs';
+import {REQUIRED_SHEETS,buildTemplatePatches,exportExpenseReadiness,recommendedZslSection,receiptItemLabel,zslReceiptDescription} from '../src/zsl-template-map.mjs';
 import {inspectZslXlsx,createFilledXlsx,ensureBundledZslTemplate,getTemplateInfo} from '../src/zsl-xlsx.js';
 import 'fake-indexeddb/auto';
 globalThis.window=globalThis;
@@ -164,17 +164,16 @@ test('card purchase can be written to original XLSX before bank proof arrives',a
  const zip=await JSZip.loadAsync(result.blob);
  assert.equal(xmlCellValue(cellValue(await zip.file('xl/worksheets/sheet3.xml').async('string'),'H26')),'127.78');
 });
-test('fuel and meal receipts awaiting ZSL category are visible individually in readiness list',()=>{
+test('all fuel receipts automatically use the ZSL-owned vehicle even without a selected vehicle',()=>{
  const fuel={...expense('fuel-1',127.78),zsl_section:'',category:'fuel',payment_method:'card',bank_path:null};
  const food={...expense('food-1',55.84),zsl_section:'',category:'food'};
- assert.equal(recommendedZslSection(fuel),'unassigned');
+ assert.equal(recommendedZslSection(fuel),'zsl_car');
  assert.equal(recommendedZslSection(food),'unassigned');
- const prepared=buildTemplatePatches({event,trainer,expenses:[fuel,food],funding:[]});
- assert.equal(prepared.skipped.length,2);
- assert.ok(prepared.skipped.find(x=>x.includes('vyber typ vozidla')));
- assert.ok(prepared.skipped.find(x=>x.includes('zahraniční stravování')));
+ const prepared=buildTemplatePatches({event,trainer,expenses:[fuel,food],funding:[],variant:'official'});
+ assert.equal(prepared.skipped.length,1);
+ assert.ok(prepared.skipped.some(x=>x.includes('zahraniční stravování')));
  const status=exportExpenseReadiness(fuel,event);
- assert.equal(status.canExport,false);
+ assert.equal(status.canExport,true);
  assert.ok(status.warnings.some(x=>x.includes('bankovní potvrzení')));
 });
 test('unreviewed OCR can be exported for checking but is flagged prominently',()=>{
@@ -213,30 +212,55 @@ test('official ZSL OTHER section stops before summary formula on row 56',async()
  assert.ok(!out.changes.some(x=>x.cell==='H56'||x.cell==='H57'));
 });
 test('no valid financial receipt throws rather than downloading an Excel with only names',async()=>{
- const empty={...expense('unassigned',127.78),zsl_section:'',category:'fuel'};
+ const empty={...expense('unassigned',127.78),zsl_section:'',category:'food'};
  await assert.rejects(async()=>createFilledXlsx(await syntheticTemplate({variant:'official'}),
   {event,trainer,riders:[{name:'Athlete A'}],expenses:[empty],funding:[]},X),
   /Excel by neobsahoval žádnou finanční položku/);
 });
 
-test('a trainer sets vehicle owner once for the trip and all fuel receipts use that ZSL section',async()=>{
- const trip={...event,defaultFuelSection:'zsl_car',vehicleDetails:'Renault Trafic AA-619RJ'};
- const fuel={id:'g1',category:'fuel',zsl_section:'',merchant:'Gutmann',receipt_path:'receipt1',
+test('historical private/unknown vehicle settings never block or reroute fuel and AdBlue',async()=>{
+ const trip={...event,defaultFuelSection:'private_car'};
+ const fuel={id:'g1',category:'fuel',zsl_section:'private_car',merchant:'Gutmann',receipt_path:'receipt1',
   spent_on:'2026-11-02',amount:127.78,payment_method:'card',bank_path:null,
-  ocr:{confidence:'high',merchantConfidence:'high',reviewed:false,autoReady:true}};
+  ocr:{confidence:'high',merchantConfidence:'high',reviewed:false,autoReady:true,rawText:'DIESEL 58L'}};
  const planned=buildTemplatePatches({event:trip,trainer,expenses:[fuel],variant:'official'});
  assert.equal(planned.skipped.length,0);
- assert.ok(planned.patches.some(x=>x.group==='receipt:g1'&&x.cell==='C26'&&
-   String(x.value).includes('Renault Trafic AA-619RJ')));
+ assert.ok(planned.patches.some(x=>x.group==='receipt:g1'&&x.cell==='C26'&&x.value==='02.11.26 – Diesel'));
  const out=await createFilledXlsx(await syntheticTemplate({variant:'official'}),
   {event:trip,trainer,riders:[],expenses:[fuel],funding:[]},X);
  assert.equal(out.financialReceiptCount,1);
  assert.ok(out.changes.some(x=>x.cell==='H26'&&x.value===127.78));
 });
-test('no automatic company/private car reimbursement can be invented from OCR only',()=>{
- const trip={...event,defaultFuelSection:'private_car'};
- const receipt={...expense('private-gas',89),zsl_section:'',category:'fuel'};
- const planned=buildTemplatePatches({event:trip,trainer,expenses:[receipt],variant:'official'});
- assert.equal(planned.skipped.length,1);
- assert.match(planned.skipped[0],/chybí podklady pro výpočet náhrady/);
+test('date and concise item are written directly into original financial cells',async()=>{
+ const expenses=[
+  {id:'a',category:'fuel',zsl_section:'',merchant:'OMV',amount:10,spent_on:'2026-11-02',receipt_path:'ra',ocr:{rawText:'ADBLUE'}},
+  {id:'b',category:'resort',merchant:'Resort',amount:20,spent_on:'2026-11-03',receipt_path:'rb',ocr:{rawText:'STARTGELD / Startovné'}},
+  {id:'c',category:'resort',merchant:'Resort',amount:30,spent_on:'2026-11-04',receipt_path:'rc',ocr:{rawText:'STRECKENMIETE / prenájom trati'}},
+  {id:'d',category:'resort',merchant:'Resort',amount:40,spent_on:'2026-11-05',receipt_path:'rd',itemLabel:'Skipas trenérov'}
+ ];
+ const planned=buildTemplatePatches({event,trainer,expenses,variant:'official'});
+ for(const [cell,value] of [
+  ['C26','02.11.26 – AdBlue'],['C49','03.11.26 – Startovné'],
+  ['C50','04.11.26 – Prenájom trate'],['C51','05.11.26 – Skipas trenérov']
+ ])assert.ok(planned.patches.some(p=>p.cell===cell&&p.value===value),cell);
+ const out=await createFilledXlsx(await syntheticTemplate({variant:'official'}),{event,trainer,expenses,riders:[],funding:[]},X);
+ assert.equal(out.financialReceiptCount,4);
+ const zip=await JSZip.loadAsync(out.blob);
+ const xml=await zip.file('xl/worksheets/sheet3.xml').async('string');
+ for(const [cell,value] of [['C26','02.11.26 – AdBlue'],['C49','03.11.26 – Startovné'],
+  ['C50','04.11.26 – Prenájom trate'],['C51','05.11.26 – Skipas trenérov']])
+  assert.equal(xmlCellValue(cellValue(xml,cell)),value);
+});
+test('receipt item label classifies specific products with manual correction as the highest priority',()=>{
+ const line=(rawText,category='resort')=>({ocr:{rawText},category,spent_on:'2026-11-03'});
+ assert.equal(receiptItemLabel(line('DIESEL 42,78', 'fuel')),'Diesel');
+ assert.equal(receiptItemLabel(line('AdBlue 12L','fuel')),'AdBlue');
+ assert.equal(receiptItemLabel(line('Super 95 Benzin','fuel')),'Benzín');
+ assert.equal(receiptItemLabel(line('STARTGELD')),'Startovné');
+ assert.equal(receiptItemLabel(line('Streckenmiete')),'Prenájom trate');
+ assert.equal(receiptItemLabel(line('Pronájem trati')),'Prenájom trate');
+ assert.equal(receiptItemLabel(line('Skipasy')),'Skipas');
+ assert.equal(receiptItemLabel(line('SKIPASS')),'Skipas');
+ assert.equal(receiptItemLabel({...line('SKIPASS'),itemLabel:'Skipas – 3 dni'}),'Skipas – 3 dni');
+ assert.equal(zslReceiptDescription({...line('SKIPASS'),itemLabel:'Startovné'}),'03.11.26 – Startovné');
 });
