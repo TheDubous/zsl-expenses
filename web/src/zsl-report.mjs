@@ -37,9 +37,8 @@ const CENT=value=>Math.round((Number(value)||0)*100);
 export const num2=value=>Math.round((Number(value)||0)*100)/100;
 function sumCents(list){return list.reduce((acc,item)=>acc+CENT(item.amount),0)/100}
 export function expenseSection(expense,event){
+  if(expense.category==='fuel')return 'zsl_car';
   if(ZSL_EXPENSE_SECTIONS.some(x=>x.id===expense.zsl_section))return expense.zsl_section;
-  if(expense.category==='fuel')
-    return ['zsl_car','private_car','company_car'].includes(event?.defaultFuelSection)?event.defaultFuelSection:'unassigned';
   if(expense.category==='food')return 'unassigned';
   if(expense.category==='lodging')return 'lodging';
   if(expense.category==='travel')return 'transport';
