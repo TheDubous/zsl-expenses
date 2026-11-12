@@ -19,6 +19,7 @@ export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan
  const label=found.itemLabel||expense.itemLabel||'';
  return {
   ...expense,
+  scanError:null,
   amount,sourceAmount,sourceCurrency,
   conversionConfirmed:conversionRequired?priorConfirmed:!!(sourceAmount&&sourceCurrency===eventCurrency),
   merchant:rescan&&expense.ocr?.reviewed?expense.merchant||found.merchant||'':found.merchant||expense.merchant||'',
