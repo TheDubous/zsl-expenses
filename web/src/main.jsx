@@ -169,10 +169,11 @@ function App(){
       for(const file of files)uploaded.push({file,expense:await addReceipt(active.id,file)});
       await refresh();
       let scanned=0,failed=0,pendingFX=0,scanner=null;
+      const scanErrors=[];
       try{
         for(let i=0;i<uploaded.length;i++){
           const {file,expense}=uploaded[i];
-          if(!canRecognize(file)&&!isPdf(file)){failed++;continue}
+          if(!canRecognize(file)&&!isPdf(file)){failed++;scanErrors.push(file.name+': nepodporovaný typ');continue}
           try{
             setOcrProgress('Čtu doklad '+(i+1)+'/'+uploaded.length+': '+file.name);
             const found=isPdf(file)?
@@ -183,7 +184,12 @@ function App(){
             if(isCurrencyConversionPending(candidate,active.currency))pendingFX++;
             if(!found.sourceAmount&&!Number(found.amount))failed++;
             else scanned++;
-          }catch(error){failed++;setOcrProgress('Nepodařilo se přečíst '+file.name+': '+(error?.message||error))}
+           }catch(error){
+            failed++;
+            const message=String(error?.message||error);
+            scanErrors.push(file.name+': '+message);
+            await saveExpense({...expense,scanError:message});
+          }
         }
       }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
       setView('documents');
@@ -191,6 +197,7 @@ function App(){
         (failed?' · '+failed+' vyžaduje kontrolu.':'')+
         (pendingFX?' · '+pendingFX+' dokladů v cizí měně vyžaduje přepočet do EUR.':'')+
         ' PDF čteme ze všech stran; originály zůstávají v telefonu.');
+      if(scanErrors.length)setError('Některé doklady nešlo přečíst: '+scanErrors.slice(0,3).join(' | '));
     });
   }
   async function rescanExpense(expense){
@@ -370,6 +377,7 @@ function App(){
       {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
       {expenses.map(e=><div className="expense" key={e.id}>
         <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{isCurrencyConversionPending(e,active.currency)?currency(e.sourceAmount,e.sourceCurrency):currency(e.amount,active.currency)}</b></div>
+        {e.scanError&&<p className="zsl-fx-warning">Přečtení dokladu se nepovedlo: {e.scanError}. Zkus „Přečíst znovu“ nebo uprav údaje ručně.</p>}
         {isCurrencyConversionPending(e,active.currency)&&<p className="zsl-fx-warning">Rozpoznáno {currency(e.sourceAmount,e.sourceCurrency)}. Před zápisem do ZSL doplň částku v EUR podle skutečného přepočtu. Do eurových součtů se zatím nezapočítává.</p>}
         <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed&&!e.ocr.autoReady} ok={!!e.ocr.reviewed||!!e.ocr.autoReady}>{e.ocr.reviewed?'Ručně upraveno':e.ocr.autoReady?'Automaticky načteno':'Zkontrolovat OCR ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
