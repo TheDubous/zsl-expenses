@@ -1,5 +1,16 @@
 # ZSL Expenses · Lokální PWA (bez databázového serveru)
 
+## v0.9.1 – datum a stručný název položky v ZSL
+
+- Původní excelový formulář se **nepřestavuje**. Ve vstupním popisovém poli původního listu **s.3 – výdavky** se zapisuje stručná položka s datem přímo vedle finančních údajů, například **`03.11.26 – Diesel`**, **`03.11.26 – AdBlue`**, **`03.11.26 – Skipas`**, **`03.11.26 – Startovné`** nebo **`03.11.26 – Prenájom trate`**. V části zahraniční stravy zůstává datum v původní datumové buňce a stručná položka v popisovém poli.
+- Název položky se určuje z OCR textu, nejen z obchodního jména dodavatele. Pokud druh paliva není na účtence jistý, použije se obecné **PHM** a nevymýšlí se Diesel/AdBlue/benzín.
+- U účtenky je pole **Položka pro ZSL Excel (stručně)**, které přepíše automatický návrh. Stejné označení se ukáže i v seznamu dokladů, PDF příloh a CSV.
+- **Všechno palivo (benzín, diesel, nafta, AdBlue) automaticky patří do Motorové vozidlo ZSL.** Nastavení typu vozidla se již nevybírá při založení ani úpravě akce. Platí to i pro starší účtenky a starší nastavení `private_car` nebo `company_car` – nic není třeba přenahrávat.
+- Kapacita formuláře a ochrana původních vzorců, styly buněk, datum jako Excel serial, offline ukládání a samostatný PDF výstup zůstávají zachované.
+- Testy kontrolují skutečný oficiální 11-listový ZSL formulář, rozpoznávání i české názvy `Pronájem trati`, `Skipasy`, `Startovné` a palivové položky.
+
+---
+
 ## ZSL Expenses v0.9 – téměř finální provozní verze
 
 ### Nový režim pro trenéra (bez schvalování)
