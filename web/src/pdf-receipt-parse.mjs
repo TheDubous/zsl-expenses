@@ -60,7 +60,13 @@ export function parsePdfReceiptPages(pages){
  const invoicesOnly=totals.filter(x=>x.kind==='grand-total'&&invoices[x.pageIndex]);
  const realTotals=totals.filter(x=>x.kind==='grand-total');
  const pick=invoicesOnly.length?invoicesOnly:realTotals.length?realTotals:totals;
- const selected=[...pick].sort((a,b)=>b.score-a.score||b.pageIndex-a.pageIndex)[0]||null;
+ const incompatibleSubtotals=!invoicesOnly.length&&realTotals.length>1&&
+   new Set(realTotals.map(x=>x.pageIndex)).size>1&&
+   new Set(realTotals.map(x=>String(x.amount)+'/'+x.currency)).size>1;
+ // Two different ticket subtotals without a final invoice are ambiguous:
+ // do not invent a sum or select only the last page.
+ const selected=incompatibleSubtotals?null:
+  [...pick].sort((a,b)=>b.score-a.score||b.pageIndex-a.pageIndex)[0]||null;
  const selectedPage=selected?.pageIndex??-1;
  const fromPage=selectedPage>=0?texts[selectedPage]:'';
  const currency=selected?.currency||
