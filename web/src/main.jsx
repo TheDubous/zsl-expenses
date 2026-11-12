@@ -7,6 +7,8 @@ import {exportBackup,importBackup,exportEvent,downloadBlob} from './archive.js';
 import SettlementPreview from './SettlementPreview.jsx';
 import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
+import {recognizePdf,isPdf} from './pdf-reader.js';
+import {mergeRecognizedExpense,isCurrencyConversionPending,requiresCurrencyConversion} from './receipt-import.mjs';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
 import {exportExpenseReadiness,receiptItemLabel} from './zsl-template-map.mjs';
@@ -161,61 +163,58 @@ function App(){
   }
   async function uploadReceipts(inputFiles){
     if(!active||!inputFiles?.length)return;
-    // Copy FileList before resetting the HTML input.
     const files=Array.from(inputFiles);
     await run(async()=>{
       const uploaded=[];
       for(const file of files)uploaded.push({file,expense:await addReceipt(active.id,file)});
-      await refresh(); // Receipt images are safe even if OCR cannot run.
-      let scanned=0,failed=0;
-      const photos=uploaded.filter(x=>canRecognize(x.file));
-      if(photos.length){
-        let scanner=null;
-        try{
-          setOcrProgress('Připravuji rozpoznávání…');
-          scanner=await createOCRSession(setOcrProgress);
-          for(let i=0;i<photos.length;i++){
-            const {file,expense}=photos[i];
-            try{
-              setOcrProgress('Čtu účtenku '+(i+1)+'/'+photos.length+'…');
-              const found=await scanner.scan(file,{mode:ocrMode});
-              const candidate={
-                ...expense,amount:found.amount||0,merchant:found.merchant||'',
-                spent_on:found.spent_on||expense.spent_on,
-                category:found.category||expense.category,
-                payment_method:found.payment_method||'unknown',
-                ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,autoReady:autoOCRReady(found),scannedAt:new Date().toISOString()}
-              };
-              await saveExpense(candidate);scanned++;
-            }catch(ocrError){failed++;}
-          }
-        }catch(ocrError){failed+=photos.length-scanned;setError('OCR se nepodařilo spustit: '+(ocrError.message||ocrError)+'. Účtenky jsou uložené; částku lze doplnit ručně.')}
-        finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('');}
-      }
+      await refresh();
+      let scanned=0,failed=0,pendingFX=0,scanner=null;
+      try{
+        for(let i=0;i<uploaded.length;i++){
+          const {file,expense}=uploaded[i];
+          if(!canRecognize(file)&&!isPdf(file)){failed++;continue}
+          try{
+            setOcrProgress('Čtu doklad '+(i+1)+'/'+uploaded.length+': '+file.name);
+            const found=isPdf(file)?
+              await recognizePdf(file,{onProgress:setOcrProgress,mode:ocrMode}):
+              await (async()=>{if(!scanner)scanner=await createOCRSession(setOcrProgress);return scanner.scan(file,{mode:ocrMode})})();
+            const candidate=mergeRecognizedExpense(expense,found,active.currency);
+            await saveExpense(candidate);
+            if(isCurrencyConversionPending(candidate,active.currency))pendingFX++;
+            if(!found.sourceAmount&&!Number(found.amount))failed++;
+            else scanned++;
+          }catch(error){failed++;setOcrProgress('Nepodařilo se přečíst '+file.name+': '+(error?.message||error))}
+        }
+      }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
       setView('documents');
-      setNotice('Uloženo '+uploaded.length+' účtenek. Automaticky předvyplněno '+scanned+'.'+(failed?' U '+failed+' fotografií je potřeba ruční kontrola.':'')+' Údaje s vysokou jistotou OCR jsou uložené automaticky; položky s nízkou jistotou můžeš opravit přes Upravit.');
+      setNotice('Uloženo '+uploaded.length+' dokladů; rozpoznáno '+scanned+
+        (failed?' · '+failed+' vyžaduje kontrolu.':'')+
+        (pendingFX?' · '+pendingFX+' dokladů v cizí měně vyžaduje přepočet do EUR.':'')+
+        ' PDF čteme ze všech stran; originály zůstávají v telefonu.');
     });
   }
   async function rescanExpense(expense){
     await run(async()=>{
       const doc=await getOne('documents',expense.receipt_path);
-      if(!doc?.blob)throw new Error('Fotografii se nepodařilo načíst.');
-      if(!canRecognize(doc.blob))throw new Error('OCR podporuje fotografie, nikoli PDF. Částku z PDF zatím zadej ručně.');
+      if(!doc?.blob)throw new Error('Soubor dokladu není dostupný.');
       let scanner=null;
       try{
-        setOcrProgress('Čtu existující účtenku…');
-        scanner=await createOCRSession(setOcrProgress);
-        const found=await scanner.scan(doc.blob,{mode:ocrMode});
-        await saveExpense({
-          ...expense,
-          amount:Number(expense.amount)>0?expense.amount:(found.amount||0),
-          merchant:expense.ocr&&!expense.ocr.reviewed?(found.merchant||expense.merchant||''):(expense.merchant||found.merchant||''),
-          spent_on:found.spent_on||expense.spent_on,
-          category:expense.category==='other'?found.category:expense.category,
-          payment_method:expense.payment_method==='unknown'?found.payment_method:expense.payment_method,
-          ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,autoReady:autoOCRReady(found),scannedAt:new Date().toISOString()}
-        });
-        setNotice('OCR dokončeno. Vysoce jisté údaje se uloží automaticky. Při nejasnosti otevři detail výdaje.');
+        setOcrProgress('Znovu čtu uložený doklad…');
+        let found;
+        if(isPdf(doc.blob)||isPdf({name:doc.name})){
+          found=await recognizePdf(doc.blob,{onProgress:setOcrProgress,mode:ocrMode});
+        }else{
+          if(!canRecognize(doc.blob)&&!canRecognize({name:doc.name}))
+            throw new Error('Tento typ dokladu nelze automaticky přečíst.');
+          scanner=await createOCRSession(setOcrProgress);
+          found=await scanner.scan(doc.blob,{mode:ocrMode});
+        }
+        const candidate=mergeRecognizedExpense(expense,found,active.currency,{rescan:true});
+        await saveExpense(candidate);
+        setNotice(isCurrencyConversionPending(candidate,active.currency)?
+          'PDF přečteno: '+candidate.sourceAmount+' '+candidate.sourceCurrency+
+          '. Do ZSL zadej správnou částku v EUR podle bankovního výpisu.':
+          'Doklad přečten znovu. Částka, dodavatel a datum byly doplněny.');
       }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
     });
   }
@@ -224,6 +223,7 @@ function App(){
     if(!Number.isFinite(val)||val<0){setError('Neplatná částka výdaje.');return}
     await run(async()=>{
       await saveExpense({...editing,merchant:String(f.get('merchant')||'').trim(),spent_on:f.get('spentOn')||'',amount:val,category:f.get('category'),payment_method:f.get('method'),zsl_section:f.get('zslSection')==='auto'?'':String(f.get('zslSection')||''),
+      conversionConfirmed:requiresCurrencyConversion(editing,active?.currency||'EUR')?(val>0):editing.conversionConfirmed,
       vehicleDetails:String(f.get('vehicleDetails')||'').trim(),itemLabel:String(f.get('itemLabel')||'').trim().slice(0,70),note:String(f.get('note')||''),ocr:editing.ocr?{...editing.ocr,reviewed:true}:undefined});
       setEditing(null);setNotice('Údaje účtenky uložené.');
     })
