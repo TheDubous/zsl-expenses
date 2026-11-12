@@ -355,7 +355,7 @@ function App(){
             <option value="precise">Důkladné – více průchodů (doporučeno)</option>
             <option value="fast">Rychlé – základ + hlavička</option>
           </select>
-          <small>OCR běží přímo na telefonu. První použití potřebuje internet k načtení jazykových dat. PDF se zatím automaticky nečte.</small>
+          <small>OCR běží přímo na telefonu. První použití potřebuje internet k načtení jazykových dat. PDF s textem se čte automaticky ze všech stran. U naskenovaného PDF se použije OCR. Vše zůstává v telefonu.</small>
         </div>
         <div className="upload-row">
           <label className="btn filebtn"><Upload size={17}/> Více účtenek<input type="file" accept="image/*,application/pdf" multiple disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
@@ -369,12 +369,13 @@ function App(){
       <div className="heading"><h3>Účtenky</h3><span className="muted">{expenses.length} dokladů</span></div>
       {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
       {expenses.map(e=><div className="expense" key={e.id}>
-        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{currency(e.amount,active.currency)}</b></div>
+        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{isCurrencyConversionPending(e,active.currency)?currency(e.sourceAmount,e.sourceCurrency):currency(e.amount,active.currency)}</b></div>
+        {isCurrencyConversionPending(e,active.currency)&&<p className="zsl-fx-warning">Rozpoznáno {currency(e.sourceAmount,e.sourceCurrency)}. Před zápisem do ZSL doplň částku v EUR podle skutečného přepočtu. Do eurových součtů se zatím nezapočítává.</p>}
         <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed&&!e.ocr.autoReady} ok={!!e.ocr.reviewed||!!e.ocr.autoReady}>{e.ocr.reviewed?'Ručně upraveno':e.ocr.autoReady?'Automaticky načteno':'Zkontrolovat OCR ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
           <Button small secondary onClick={()=>setEditing(e)}>Upravit</Button>
           {e.receipt_path&&<Button small secondary onClick={()=>viewDocument(e.receipt_path)}>Náhled účtenky</Button>}
-          {e.receipt_path&&!/\.pdf$/i.test(e.receipt_name||'')&&<Button small secondary disabled={busy} onClick={()=>rescanExpense(e)}><ScanLine size={14}/> Přečíst znovu</Button>}
+          {e.receipt_path&&<Button small secondary disabled={busy} onClick={()=>rescanExpense(e)}><ScanLine size={14}/> Přečíst znovu</Button>}
           {e.bank_path?<Button small secondary onClick={()=>viewDocument(e.bank_path)}>Potvrzení</Button>:e.payment_method==='card'&&<label className="btn small filebtn"><Plus size={14}/> Připojit potvrzení<input type="file" accept="application/pdf,image/*" disabled={busy} onChange={ev=>{attachBank(e,ev.target.files[0]);ev.target.value=''}}/></label>}
           <Button small secondary danger onClick={()=>removeExpense(e)}><Trash2 size={14}/></Button>
         </div>
@@ -518,7 +519,11 @@ function App(){
             <Button small secondary onClick={()=>setViewingDoc(editing.receipt_path)}><Receipt size={15}/> Zobrazit originální účtenku</Button>
           </div>
           <Input label="Obchodník / dodavatel" name="merchant" defaultValue={editing.merchant} placeholder="Např. Slovnaft"/>
-          <div className="two-col"><Input label="Datum" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label="Částka" name="amount" defaultValue={String(editing.amount||'')} inputMode="decimal" required/></div>
+          <div className="two-col"><Input label="Datum platby" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label={requiresCurrencyConversion(editing,active?.currency||'EUR')?'Přepočtená částka pro ZSL (EUR)':'Částka ('+(active?.currency||'EUR')+')'} name="amount" defaultValue={Number(editing.amount)>0?String(editing.amount):''} inputMode="decimal" placeholder={requiresCurrencyConversion(editing,active?.currency||'EUR')?'Přepočtená suma v EUR':'0,00'} required/></div>
+          {Number(editing.sourceAmount)>0&&<div className="zsl-fx-warning">
+            <strong>Původní cena z PDF: {currency(editing.sourceAmount,editing.sourceCurrency||'EUR')}</strong>
+            {requiresCurrencyConversion(editing,active?.currency||'EUR')&&<p>PDF je v jiné měně. Nezadávej tuto původní částku do eurového vyúčtování. Doplň reálně přepočtenou částku podle banky či účetního podkladu. Eurové ceny uvedené informativně na jízdence nejsou potvrzením bankovního kurzu.</p>}
+          </div>}
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
           <Select label="Zařazení do originálu ZSL (palivo vždy vozidlo ZSL)" name="zslSection"
