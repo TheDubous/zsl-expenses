@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {parsePdfReceiptPages} from '../src/pdf-receipt-parse.mjs';
-import {mergeRecognizedExpense,isCurrencyConversionPending} from '../src/receipt-import.mjs';
+import {mergeRecognizedExpense,isCurrencyConversionPending,originalAmountDisplay} from '../src/receipt-import.mjs';
 import {exportExpenseReadiness,receiptItemLabel} from '../src/zsl-template-map.mjs';
 import {expenseStatus,summarize} from '../src/utils.mjs';
 import {PDFDocument,StandardFonts} from 'pdf-lib';
@@ -76,6 +76,14 @@ test('PDF with only page prices must not invent an additional summed total',()=>
  assert.equal(result.pdfPages,2);
  assert.equal(result.pdfHasInvoice,false);
  assert.equal(result.needsReview,true);
+});
+test('unidentified PDF currency cannot be silently treated as EUR',()=>{
+ const r=parsePdfReceiptPages(['INVOICE\nTotal 1469\nPayment date: 31.10.2026\nVendor unknown']);
+ const saved=mergeRecognizedExpense({id:'other',receipt_path:'file'},r,'EUR');
+ assert.equal(saved.amount,0);
+ assert.equal(isCurrencyConversionPending(saved,'EUR'),true);
+ assert.match(originalAmountDisplay(saved),/měna nerozpoznána/);
+ assert.equal(exportExpenseReadiness(saved,{currency:'EUR'}).canExport,false);
 });
 test('empty text PDF is not fabricated as a zero price',()=>{
  const r=parsePdfReceiptPages(['','']);
