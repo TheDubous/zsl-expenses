@@ -1,6 +1,6 @@
 import React,{useState} from 'react';
 import {FileSpreadsheet,FileText,Upload,Download,AlertCircle,CheckCircle2,ShieldCheck,ClipboardList} from 'lucide-react';
-import {buildTemplatePatches,exportExpenseReadiness,recommendedZslSection,REQUIRED_SHEETS} from './zsl-template-map.mjs';
+import {buildTemplatePatches,exportExpenseReadiness,recommendedZslSection,receiptItemLabel,REQUIRED_SHEETS} from './zsl-template-map.mjs';
 import {currency} from './utils.mjs';
 
 function Message({children,type='warning'}){
@@ -65,7 +65,7 @@ export default function SettlementPreview({
 
   <div className="panel">
    <div className="heading"><h3><ClipboardList size={20}/> Zařazení účtenek do původního Excelu</h3></div>
-   <p className="muted">Každá účtenka má přesnou sekci ZSL. U paliva potřebujeme znát majitele vozidla, u jídla správný typ výdaje. Účtenky bez bankovního potvrzení lze do Excelu zapsat; potvrzení však musíš doplnit před odevzdáním.</p>
+   <p className="muted">Palivo a AdBlue se vždy zařadí do Motorové vozidlo ZSL. U ostatních účtenek můžeš zkontrolovat sekci a krátký název položky. Účtenky bez bankovního potvrzení lze do Excelu zapsat; potvrzení však musíš doplnit před odevzdáním.</p>
    <div className="counts">
      <div><strong>{valid.length} / {expenses.length}</strong><span>Výdajů připravených k zápisu</span></div>
      <div><strong>{currency(readyTotal,event.currency)}</strong><span>Očekávaná suma zápisu</span></div>
@@ -75,18 +75,16 @@ export default function SettlementPreview({
    <div className="zsl-preflight-list">
    {checks.map(({expense,...status})=><div className="zsl-preflight-item" key={expense.id}>
      <div className="zsl-preflight-top">
-       <div><strong>{expense.merchant||expense.receipt_name||'Neurčený dodavatel'}</strong>
+       <div><strong>{receiptItemLabel(expense)}</strong><small>{expense.merchant||expense.receipt_name||'Neurčený dodavatel'}</small>
          <small>{expense.spent_on||'Bez data'} · {expense.receipt_name||'Doklad'} · {expense.payment_method==='card'?'Karta':expense.payment_method==='cash'?'Hotovost':'Platba neurčena'}</small>
        </div>
        <span>{currency(expense.amount,event.currency)}</span>
      </div>
      <div className="zsl-preflight-controls">
        <label>Kam zapsat v ZSL?
-         <select value={recommendedZslSection(expense,event)} disabled={busy} onChange={e=>onSetExpenseSection(expense,e.target.value)}>
+         <select value={recommendedZslSection(expense,event)} disabled={busy||expense.category==='fuel'} onChange={e=>onSetExpenseSection(expense,e.target.value)}>
            <option value="unassigned">Vyžaduje rozhodnutí – nezařazeno</option>
-           <option value="zsl_car">s.3 – Motorové vozidlo ZSL (tankovanie)</option>
-           <option value="private_car">s.3 – Súkromné vozidlo (vyžaduje km)</option>
-           <option value="company_car">s.3 – Vozidlo právnickej osoby (vyžaduje km)</option>
+           <option value="zsl_car">s.3 – Motorové vozidlo ZSL</option>
            <option value="transport">s.3 – Cestovné / doprava</option>
            <option value="lodging">s.3 – Ubytovanie</option>
            <option value="other">s.3 – INÉ vedľajšie výdavky</option>
