@@ -8,7 +8,7 @@ import SettlementPreview from './SettlementPreview.jsx';
 import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
 import {recognizePdf,isPdf} from './pdf-reader.js';
-import {mergeRecognizedExpense,isCurrencyConversionPending,requiresCurrencyConversion} from './receipt-import.mjs';
+import {mergeRecognizedExpense,isCurrencyConversionPending,requiresCurrencyConversion,originalAmountDisplay} from './receipt-import.mjs';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
 import {exportExpenseReadiness,receiptItemLabel} from './zsl-template-map.mjs';
@@ -376,9 +376,9 @@ function App(){
       <div className="heading"><h3>Účtenky</h3><span className="muted">{expenses.length} dokladů</span></div>
       {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
       {expenses.map(e=><div className="expense" key={e.id}>
-        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{isCurrencyConversionPending(e,active.currency)?currency(e.sourceAmount,e.sourceCurrency):currency(e.amount,active.currency)}</b></div>
+        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{isCurrencyConversionPending(e,active.currency)?originalAmountDisplay(e):currency(e.amount,active.currency)}</b></div>
         {e.scanError&&<p className="zsl-fx-warning">Přečtení dokladu se nepovedlo: {e.scanError}. Zkus „Přečíst znovu“ nebo uprav údaje ručně.</p>}
-        {isCurrencyConversionPending(e,active.currency)&&<p className="zsl-fx-warning">Rozpoznáno {currency(e.sourceAmount,e.sourceCurrency)}. Před zápisem do ZSL doplň částku v EUR podle skutečného přepočtu. Do eurových součtů se zatím nezapočítává.</p>}
+        {isCurrencyConversionPending(e,active.currency)&&<p className="zsl-fx-warning">Rozpoznáno {originalAmountDisplay(e)}. Před zápisem do ZSL doplň částku v EUR podle skutečného přepočtu. Do eurových součtů se zatím nezapočítává.</p>}
         <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed&&!e.ocr.autoReady} ok={!!e.ocr.reviewed||!!e.ocr.autoReady}>{e.ocr.reviewed?'Ručně upraveno':e.ocr.autoReady?'Automaticky načteno':'Zkontrolovat OCR ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
           <Button small secondary onClick={()=>setEditing(e)}>Upravit</Button>
@@ -529,7 +529,7 @@ function App(){
           <Input label="Obchodník / dodavatel" name="merchant" defaultValue={editing.merchant} placeholder="Např. Slovnaft"/>
           <div className="two-col"><Input label="Datum platby" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label={requiresCurrencyConversion(editing,active?.currency||'EUR')?'Přepočtená částka pro ZSL (EUR)':'Částka ('+(active?.currency||'EUR')+')'} name="amount" defaultValue={Number(editing.amount)>0?String(editing.amount):''} inputMode="decimal" placeholder={requiresCurrencyConversion(editing,active?.currency||'EUR')?'Přepočtená suma v EUR':'0,00'} required/></div>
           {Number(editing.sourceAmount)>0&&<div className="zsl-fx-warning">
-            <strong>Původní cena z PDF: {currency(editing.sourceAmount,editing.sourceCurrency||'EUR')}</strong>
+            <strong>Původní cena z PDF: {originalAmountDisplay(editing)}</strong>
             {requiresCurrencyConversion(editing,active?.currency||'EUR')&&<p>PDF je v jiné měně. Nezadávej tuto původní částku do eurového vyúčtování. Doplň reálně přepočtenou částku podle banky či účetního podkladu. Eurové ceny uvedené informativně na jízdence nejsou potvrzením bankovního kurzu.</p>}
           </div>}
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
@@ -551,7 +551,7 @@ function App(){
               {editing.ocr.merchantCandidates.slice(0,4).map(c=><button key={c.name} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('merchant');if(inp)inp.value=c.name}}>{c.name}</button>)}
             </div>}
             {(editing.ocr.amountCandidates||[]).length>0&&<div className="ocr-candidates">Rozpoznané částky: {editing.ocr.amountCandidates.map((c,i)=>c.currency&&c.currency!==(active?.currency||'EUR')?
-              <span className="muted smalltext" key={i}>{currency(c.amount,c.currency)} (cizí měna – nelze vložit jako EUR)</span>:
+              <span className="muted smalltext" key={i}>{currency(c.amount,c.currency||'EUR')} (cizí měna – nelze vložit jako EUR)</span>:
               <button key={i} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,c.currency||active?.currency||'EUR')}</button>)}</div>}
             <details><summary>Zobrazit rozpoznaný text ({(editing.ocr.scannedPasses||[]).length||1} průchody)</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
           </div>}
