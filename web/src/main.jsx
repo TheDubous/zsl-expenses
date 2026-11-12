@@ -7,6 +7,8 @@ import {exportBackup,importBackup,exportEvent,downloadBlob} from './archive.js';
 import SettlementPreview from './SettlementPreview.jsx';
 import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
+import {recognizePdf,isPdf} from './pdf-reader.js';
+import {mergeRecognizedExpense,isCurrencyConversionPending,requiresCurrencyConversion,originalAmountDisplay} from './receipt-import.mjs';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
 import {exportExpenseReadiness,receiptItemLabel} from './zsl-template-map.mjs';
@@ -161,61 +163,65 @@ function App(){
   }
   async function uploadReceipts(inputFiles){
     if(!active||!inputFiles?.length)return;
-    // Copy FileList before resetting the HTML input.
     const files=Array.from(inputFiles);
     await run(async()=>{
       const uploaded=[];
       for(const file of files)uploaded.push({file,expense:await addReceipt(active.id,file)});
-      await refresh(); // Receipt images are safe even if OCR cannot run.
-      let scanned=0,failed=0;
-      const photos=uploaded.filter(x=>canRecognize(x.file));
-      if(photos.length){
-        let scanner=null;
-        try{
-          setOcrProgress('Připravuji rozpoznávání…');
-          scanner=await createOCRSession(setOcrProgress);
-          for(let i=0;i<photos.length;i++){
-            const {file,expense}=photos[i];
-            try{
-              setOcrProgress('Čtu účtenku '+(i+1)+'/'+photos.length+'…');
-              const found=await scanner.scan(file,{mode:ocrMode});
-              const candidate={
-                ...expense,amount:found.amount||0,merchant:found.merchant||'',
-                spent_on:found.spent_on||expense.spent_on,
-                category:found.category||expense.category,
-                payment_method:found.payment_method||'unknown',
-                ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,autoReady:autoOCRReady(found),scannedAt:new Date().toISOString()}
-              };
-              await saveExpense(candidate);scanned++;
-            }catch(ocrError){failed++;}
+      await refresh();
+      let scanned=0,failed=0,pendingFX=0,scanner=null;
+      const scanErrors=[];
+      try{
+        for(let i=0;i<uploaded.length;i++){
+          const {file,expense}=uploaded[i];
+          if(!canRecognize(file)&&!isPdf(file)){failed++;scanErrors.push(file.name+': nepodporovaný typ');continue}
+          try{
+            setOcrProgress('Čtu doklad '+(i+1)+'/'+uploaded.length+': '+file.name);
+            const found=isPdf(file)?
+              await recognizePdf(file,{onProgress:setOcrProgress,mode:ocrMode}):
+              await (async()=>{if(!scanner)scanner=await createOCRSession(setOcrProgress);return scanner.scan(file,{mode:ocrMode})})();
+            const candidate=mergeRecognizedExpense(expense,found,active.currency);
+            await saveExpense(candidate);
+            if(isCurrencyConversionPending(candidate,active.currency))pendingFX++;
+            if(!found.sourceAmount&&!Number(found.amount))failed++;
+            else scanned++;
+           }catch(error){
+            failed++;
+            const message=String(error?.message||error);
+            scanErrors.push(file.name+': '+message);
+            await saveExpense({...expense,scanError:message});
           }
-        }catch(ocrError){failed+=photos.length-scanned;setError('OCR se nepodařilo spustit: '+(ocrError.message||ocrError)+'. Účtenky jsou uložené; částku lze doplnit ručně.')}
-        finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('');}
-      }
+        }
+      }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
       setView('documents');
-      setNotice('Uloženo '+uploaded.length+' účtenek. Automaticky předvyplněno '+scanned+'.'+(failed?' U '+failed+' fotografií je potřeba ruční kontrola.':'')+' Údaje s vysokou jistotou OCR jsou uložené automaticky; položky s nízkou jistotou můžeš opravit přes Upravit.');
+      setNotice('Uloženo '+uploaded.length+' dokladů; rozpoznáno '+scanned+
+        (failed?' · '+failed+' vyžaduje kontrolu.':'')+
+        (pendingFX?' · '+pendingFX+' dokladů v cizí měně vyžaduje přepočet do EUR.':'')+
+        ' PDF čteme ze všech stran; originály zůstávají v telefonu.');
+      if(scanErrors.length)setError('Některé doklady nešlo přečíst: '+scanErrors.slice(0,3).join(' | '));
     });
   }
   async function rescanExpense(expense){
     await run(async()=>{
       const doc=await getOne('documents',expense.receipt_path);
-      if(!doc?.blob)throw new Error('Fotografii se nepodařilo načíst.');
-      if(!canRecognize(doc.blob))throw new Error('OCR podporuje fotografie, nikoli PDF. Částku z PDF zatím zadej ručně.');
+      if(!doc?.blob)throw new Error('Soubor dokladu není dostupný.');
       let scanner=null;
       try{
-        setOcrProgress('Čtu existující účtenku…');
-        scanner=await createOCRSession(setOcrProgress);
-        const found=await scanner.scan(doc.blob,{mode:ocrMode});
-        await saveExpense({
-          ...expense,
-          amount:Number(expense.amount)>0?expense.amount:(found.amount||0),
-          merchant:expense.ocr&&!expense.ocr.reviewed?(found.merchant||expense.merchant||''):(expense.merchant||found.merchant||''),
-          spent_on:found.spent_on||expense.spent_on,
-          category:expense.category==='other'?found.category:expense.category,
-          payment_method:expense.payment_method==='unknown'?found.payment_method:expense.payment_method,
-          ocr:{confidence:found.confidence,merchantConfidence:found.merchantConfidence,merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates,scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,rawText:found.rawText,reviewed:false,autoReady:autoOCRReady(found),scannedAt:new Date().toISOString()}
-        });
-        setNotice('OCR dokončeno. Vysoce jisté údaje se uloží automaticky. Při nejasnosti otevři detail výdaje.');
+        setOcrProgress('Znovu čtu uložený doklad…');
+        let found;
+        if(isPdf(doc.blob)||isPdf({name:doc.name})){
+          found=await recognizePdf(doc.blob,{onProgress:setOcrProgress,mode:ocrMode});
+        }else{
+          if(!canRecognize(doc.blob)&&!canRecognize({name:doc.name}))
+            throw new Error('Tento typ dokladu nelze automaticky přečíst.');
+          scanner=await createOCRSession(setOcrProgress);
+          found=await scanner.scan(doc.blob,{mode:ocrMode});
+        }
+        const candidate=mergeRecognizedExpense(expense,found,active.currency,{rescan:true});
+        await saveExpense(candidate);
+        setNotice(isCurrencyConversionPending(candidate,active.currency)?
+          'PDF přečteno: '+candidate.sourceAmount+' '+candidate.sourceCurrency+
+          '. Do ZSL zadej správnou částku v EUR podle bankovního výpisu.':
+          'Doklad přečten znovu. Částka, dodavatel a datum byly doplněny.');
       }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
     });
   }
@@ -224,6 +230,7 @@ function App(){
     if(!Number.isFinite(val)||val<0){setError('Neplatná částka výdaje.');return}
     await run(async()=>{
       await saveExpense({...editing,merchant:String(f.get('merchant')||'').trim(),spent_on:f.get('spentOn')||'',amount:val,category:f.get('category'),payment_method:f.get('method'),zsl_section:f.get('zslSection')==='auto'?'':String(f.get('zslSection')||''),
+      conversionConfirmed:requiresCurrencyConversion(editing,active?.currency||'EUR')?(val>0):editing.conversionConfirmed,
       vehicleDetails:String(f.get('vehicleDetails')||'').trim(),itemLabel:String(f.get('itemLabel')||'').trim().slice(0,70),note:String(f.get('note')||''),ocr:editing.ocr?{...editing.ocr,reviewed:true}:undefined});
       setEditing(null);setNotice('Údaje účtenky uložené.');
     })
@@ -355,7 +362,7 @@ function App(){
             <option value="precise">Důkladné – více průchodů (doporučeno)</option>
             <option value="fast">Rychlé – základ + hlavička</option>
           </select>
-          <small>OCR běží přímo na telefonu. První použití potřebuje internet k načtení jazykových dat. PDF se zatím automaticky nečte.</small>
+          <small>OCR běží přímo na telefonu. První použití potřebuje internet k načtení jazykových dat. PDF s textem se čte automaticky ze všech stran. U naskenovaného PDF se použije OCR. Vše zůstává v telefonu.</small>
         </div>
         <div className="upload-row">
           <label className="btn filebtn"><Upload size={17}/> Více účtenek<input type="file" accept="image/*,application/pdf" multiple disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
@@ -369,12 +376,14 @@ function App(){
       <div className="heading"><h3>Účtenky</h3><span className="muted">{expenses.length} dokladů</span></div>
       {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
       {expenses.map(e=><div className="expense" key={e.id}>
-        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{currency(e.amount,active.currency)}</b></div>
+        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{isCurrencyConversionPending(e,active.currency)?originalAmountDisplay(e):currency(e.amount,active.currency)}</b></div>
+        {e.scanError&&<p className="zsl-fx-warning">Přečtení dokladu se nepovedlo: {e.scanError}. Zkus „Přečíst znovu“ nebo uprav údaje ručně.</p>}
+        {isCurrencyConversionPending(e,active.currency)&&<p className="zsl-fx-warning">Rozpoznáno {originalAmountDisplay(e)}. Před zápisem do ZSL doplň částku v EUR podle skutečného přepočtu. Do eurových součtů se zatím nezapočítává.</p>}
         <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed&&!e.ocr.autoReady} ok={!!e.ocr.reviewed||!!e.ocr.autoReady}>{e.ocr.reviewed?'Ručně upraveno':e.ocr.autoReady?'Automaticky načteno':'Zkontrolovat OCR ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
           <Button small secondary onClick={()=>setEditing(e)}>Upravit</Button>
           {e.receipt_path&&<Button small secondary onClick={()=>viewDocument(e.receipt_path)}>Náhled účtenky</Button>}
-          {e.receipt_path&&!/\.pdf$/i.test(e.receipt_name||'')&&<Button small secondary disabled={busy} onClick={()=>rescanExpense(e)}><ScanLine size={14}/> Přečíst znovu</Button>}
+          {e.receipt_path&&<Button small secondary disabled={busy} onClick={()=>rescanExpense(e)}><ScanLine size={14}/> Přečíst znovu</Button>}
           {e.bank_path?<Button small secondary onClick={()=>viewDocument(e.bank_path)}>Potvrzení</Button>:e.payment_method==='card'&&<label className="btn small filebtn"><Plus size={14}/> Připojit potvrzení<input type="file" accept="application/pdf,image/*" disabled={busy} onChange={ev=>{attachBank(e,ev.target.files[0]);ev.target.value=''}}/></label>}
           <Button small secondary danger onClick={()=>removeExpense(e)}><Trash2 size={14}/></Button>
         </div>
@@ -518,7 +527,11 @@ function App(){
             <Button small secondary onClick={()=>setViewingDoc(editing.receipt_path)}><Receipt size={15}/> Zobrazit originální účtenku</Button>
           </div>
           <Input label="Obchodník / dodavatel" name="merchant" defaultValue={editing.merchant} placeholder="Např. Slovnaft"/>
-          <div className="two-col"><Input label="Datum" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label="Částka" name="amount" defaultValue={String(editing.amount||'')} inputMode="decimal" required/></div>
+          <div className="two-col"><Input label="Datum platby" name="spentOn" type="date" defaultValue={editing.spent_on||today()}/><Input label={requiresCurrencyConversion(editing,active?.currency||'EUR')?'Přepočtená částka pro ZSL (EUR)':'Částka ('+(active?.currency||'EUR')+')'} name="amount" defaultValue={Number(editing.amount)>0?String(editing.amount):''} inputMode="decimal" placeholder={requiresCurrencyConversion(editing,active?.currency||'EUR')?'Přepočtená suma v EUR':'0,00'} required/></div>
+          {Number(editing.sourceAmount)>0&&<div className="zsl-fx-warning">
+            <strong>Původní cena z PDF: {originalAmountDisplay(editing)}</strong>
+            {requiresCurrencyConversion(editing,active?.currency||'EUR')&&<p>PDF je v jiné měně. Nezadávej tuto původní částku do eurového vyúčtování. Doplň reálně přepočtenou částku podle banky či účetního podkladu. Eurové ceny uvedené informativně na jízdence nejsou potvrzením bankovního kurzu.</p>}
+          </div>}
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
           <Select label="Zařazení do originálu ZSL (palivo vždy vozidlo ZSL)" name="zslSection"
@@ -537,7 +550,9 @@ function App(){
               <span>Možní dodavatelé:</span>
               {editing.ocr.merchantCandidates.slice(0,4).map(c=><button key={c.name} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('merchant');if(inp)inp.value=c.name}}>{c.name}</button>)}
             </div>}
-            {(editing.ocr.amountCandidates||[]).length>0&&<div className="ocr-candidates">Rozpoznané částky: {editing.ocr.amountCandidates.map(c=><button key={c.amount} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,active?.currency||'EUR')}</button>)}</div>}
+            {(editing.ocr.amountCandidates||[]).length>0&&<div className="ocr-candidates">Rozpoznané částky: {editing.ocr.amountCandidates.map((c,i)=>c.currency&&c.currency!==(active?.currency||'EUR')?
+              <span className="muted smalltext" key={i}>{currency(c.amount,c.currency||'EUR')} (cizí měna – nelze vložit jako EUR)</span>:
+              <button key={i} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,c.currency||active?.currency||'EUR')}</button>)}</div>}
             <details><summary>Zobrazit rozpoznaný text ({(editing.ocr.scannedPasses||[]).length||1} průchody)</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
           </div>}
           <p className="muted smalltext">Bankovní potvrzení můžeš přiložit později v seznamu dokladů. Změna způsobu platby z karty odstraní původní bankovní přílohu.</p>

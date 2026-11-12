@@ -26,6 +26,50 @@ async function normalizeImage(blob){
   return jpg.arrayBuffer();
  }finally{URL.revokeObjectURL(source)}
 }
+// pdf-lib cannot copy pages of owner-password/permissions-restricted PDFs.
+// Many railway and airline e-tickets use those settings. Render the original
+// pages locally into this PDF as images, rather than dropping the attachment.
+// This never uploads the source or removes the original from IndexedDB.
+export async function appendProtectedPdfPages(collection,blob,{pdfEngine=null}={}){
+ const {openPdfEngine}=await import('./pdf-reader.js');
+ const engine=pdfEngine||await openPdfEngine();
+ const task=engine.getDocument({data:new Uint8Array(await blob.arrayBuffer()),useSystemFonts:true});
+ let original,appended=0;
+ try{
+  original=await task.promise;
+  if(original.numPages>32)throw new Error('Příloha PDF má více než 32 stran.');
+  for(let number=1;number<=original.numPages;number++){
+   const source=await original.getPage(number);
+   const base=source.getViewport({scale:1});
+   const scale=Math.min(1.85,Math.sqrt(3_000_000/(base.width*base.height)));
+   const viewport=source.getViewport({scale});
+   const canvas=document.createElement('canvas');
+   canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+   const ctx=canvas.getContext('2d',{alpha:false});
+   if(!ctx)throw new Error('Prohlížeč nemůže vykreslit chráněné PDF.');
+   try{
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+    await source.render({canvasContext:ctx,viewport,background:'rgb(255,255,255)'}).promise;
+    const jpgBytes=await new Promise((resolve,reject)=>canvas.toBlob(async b=>{
+     if(!b){reject(new Error('Nepodařilo se vykreslit stránku PDF.'));return}
+     try{resolve(await b.arrayBuffer())}catch(e){reject(e)}
+    },'image/jpeg',.9));
+    const image=await collection.embedJpg(jpgBytes);
+    const landscape=image.width>image.height;
+    const page=collection.addPage(landscape?[842,595]:[595,842]);
+    const size=page.getSize(),pad=20;
+    const ratio=Math.min((size.width-2*pad)/image.width,(size.height-2*pad)/image.height);
+    page.drawImage(image,{x:(size.width-image.width*ratio)/2,y:(size.height-image.height*ratio)/2,
+     width:image.width*ratio,height:image.height*ratio});
+    appended++;
+   }finally{canvas.width=canvas.height=1;source.cleanup()}
+  }
+  return appended;
+ }finally{
+  if(original)await original.destroy().catch(()=>{});
+  else await task.destroy?.().catch(()=>{});
+ }
+}
 function notePage(pdf,font,heading,lines,{color,regularFont}={}){
  const page=pdf.addPage([595,842]);
  const blue=color||{r:.07,g:.22,b:.38};
@@ -66,7 +110,9 @@ export async function buildAttachmentsPdf({event,expenses,documents=async id=>ge
     'Polozka: '+receiptItemLabel(e),
     'Dodavatel: '+(e.merchant||e.receipt_name||'Neurceno'),
     'Datum: '+(e.spent_on||'Neurceno'),
-    'Suma: '+Number(e.amount||0).toFixed(2)+' '+(event?.currency||'EUR'),
+    'Suma pro ZSL: '+Number(e.amount||0).toFixed(2)+' '+(event?.currency||'EUR'),
+    ...(Number(e.sourceAmount)>0?['Puvodni cena na dokladu: '+Number(e.sourceAmount).toFixed(2)+' '+(e.sourceCurrency||'?')]:[]),
+    ...(Number(e.sourceAmount)>0&&e.sourceCurrency!=='EUR'&&!e.conversionConfirmed?['POZOR: Doklad v jine mene - prepocet do EUR dosud nepotvrzen']:[]),
     'Uhrada: '+(e.payment_method==='card'?'KARTOU':e.payment_method==='cash'?'HOTOVE':'NEURCENO'),
     'Stav: '+expenseStatus(e),
     'Uctenka: '+(e.receipt_name||'CHYBI'),
@@ -84,9 +130,15 @@ export async function buildAttachmentsPdf({event,expenses,documents=async id=>ge
    const type=String(doc.type||doc.blob.type||'').toLowerCase(),name=doc.name||a.name||'priloha';
    try{
     if(type==='application/pdf'||/\.pdf$/i.test(name)){
-     const existing=await PDFDocument.load(await doc.blob.arrayBuffer(),{ignoreEncryption:false});
-     const pages=await pdf.copyPages(existing,existing.getPageIndices());
-     for(const p of pages)pdf.addPage(p);
+     try{
+      const existing=await PDFDocument.load(await doc.blob.arrayBuffer(),{ignoreEncryption:false});
+      const pages=await pdf.copyPages(existing,existing.getPageIndices());
+      for(const p of pages)pdf.addPage(p);
+     }catch(copyError){
+      // Copyright/print-locked tickets may not support merging PDF objects.
+      // Re-render every original page instead; never silently omit the ticket.
+      await appendProtectedPdfPages(pdf,doc.blob);
+     }
      attached+=1;
     }else{
      const jpg=await pdf.embedJpg(await normalizeImage(doc.blob));

@@ -2,6 +2,7 @@ import React,{useState} from 'react';
 import {FileSpreadsheet,FileText,Upload,Download,AlertCircle,CheckCircle2,ShieldCheck,ClipboardList} from 'lucide-react';
 import {buildTemplatePatches,exportExpenseReadiness,recommendedZslSection,receiptItemLabel,REQUIRED_SHEETS} from './zsl-template-map.mjs';
 import {currency} from './utils.mjs';
+import {originalAmountDisplay} from './receipt-import.mjs';
 
 function Message({children,type='warning'}){
  return <div className={'zsl-message '+type}>{type==='warning'?<AlertCircle size={17}/>:<CheckCircle2 size={17}/>}<div>{children}</div></div>;
@@ -78,7 +79,10 @@ export default function SettlementPreview({
        <div><strong>{receiptItemLabel(expense)}</strong><small>{expense.merchant||expense.receipt_name||'Neurčený dodavatel'}</small>
          <small>{expense.spent_on||'Bez data'} · {expense.receipt_name||'Doklad'} · {expense.payment_method==='card'?'Karta':expense.payment_method==='cash'?'Hotovost':'Platba neurčena'}</small>
        </div>
-       <span>{currency(expense.amount,event.currency)}</span>
+       <span>{Number(expense.sourceAmount)>0&&expense.sourceCurrency!=='EUR'?
+         originalAmountDisplay(expense):currency(expense.amount,event.currency)}
+         {Number(expense.sourceAmount)>0&&expense.sourceCurrency!=='EUR'&&expense.conversionConfirmed&&<small>Přepočet: {currency(expense.amount,event.currency)}</small>}
+       </span>
      </div>
      <div className="zsl-preflight-controls">
        <label>Kam zapsat v ZSL?
