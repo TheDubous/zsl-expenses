@@ -47,7 +47,8 @@ function extractTotals(lines,pageIndex,invoice){
  return values;
 }
 function merchantName(full,fallback){
- if(/Česk[eé]\s*dr[aá]hy\s*,?\s*a\.?\s*s\.?/i.test(full))return 'České dráhy, a.s.';
+ const clean=String(full||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'');
+ if(/ceske\s*drahy\s*,?\s*a\.?\s*s\.?/i.test(clean))return 'České dráhy, a.s.';
  return fallback?.merchant||null;
 }
 export function parsePdfReceiptPages(pages){
