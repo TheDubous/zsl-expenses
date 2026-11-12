@@ -38,9 +38,9 @@ export function receiptItemLabel(expense={}){
  // Separate piste/track rental from lift passes and race entry fees.
  if(match(/\b(?:startovn[eéy]|startovny|startovne|startgeld|nenngeld|entry\s*fee|registration\s*fee|race\s*fee|prihlasovac[iy]\s*poplatek)\b/))
   return 'Startovné';
- if(match(/\b(?:pren[aá]jem\s*(?:trate|trati|zjazdovky|sjezdovky)|piste[n]?\s*miete|streckenmiete|track\s*rental|slope\s*rental|pistenbenutzung|trainingspiste)\b/))
+ if(match(/\b(?:(?:pronajem|prenajom|prenajem)\s*(?:trate|trati|zjazdovky|sjezdovky)|piste[n]?\s*miete|streckenmiete|track\s*rental|slope\s*rental|pistenbenutzung|trainingspiste)\b/))
   return 'Prenájom trate';
- if(match(/\b(?:ski\s*pass|skipass|skipas|liftkarte|liftpass|skipasse|ski\s*ticket|seilbahnkarte|bergbahnticket)\b/))
+ if(match(/\b(?:ski\s*pass|skipass|skipasy|skipassy|skipas|liftkarte|liftpass|skipasse|ski\s*ticket|seilbahnkarte|bergbahnticket)\b/))
   return 'Skipas';
  if(expense.category==='lodging')return 'Ubytovanie';
  if(expense.category==='food'){
