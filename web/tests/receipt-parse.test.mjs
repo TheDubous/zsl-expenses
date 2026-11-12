@@ -58,3 +58,9 @@ test('spaced German grand total without visible payment line',()=>{
  const x=parseReceiptText('GUTMANN\nG E S A M T B E T R A G  EUR\n127,78\nSTEUERANTEIL\n21,30 EUR');
  assert.equal(x.amount,127.78);
 });
+
+test('race entry fee, slope rental and AdBlue classify to right broad expense group',()=>{
+ assert.equal(parseReceiptText('STARTGELD / Startovne 90,00 EUR').category,'resort');
+ assert.equal(parseReceiptText('Streckenmiete 300,00 EUR').category,'resort');
+ assert.equal(parseReceiptText('AD BLUE 45,00 EUR').category,'fuel');
+});
