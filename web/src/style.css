@@ -160,3 +160,7 @@
  .zsl-preflight-controls label{flex-basis:auto;width:100%}
  .zsl-preflight-controls>.btn{width:100%}
 }
+
+/* PDF receipts with amounts in CZK/CHF may not enter EUR accounting until converted. */
+.zsl-fx-warning{border-left:3px solid #f5bd61;background:#493c2750;padding:10px 12px;border-radius:7px;font-size:12px;line-height:1.5;margin:8px 0;color:#f2dfbb}
+.zsl-fx-warning p{margin:5px 0 0}
