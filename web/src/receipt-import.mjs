@@ -3,16 +3,23 @@
 // include an explicit EUR conversion in the accounting sum.
 export function requiresCurrencyConversion(expense,eventCurrency='EUR'){
  const source=String(expense?.sourceCurrency||'').toUpperCase();
- return !!(Number(expense?.sourceAmount)>0&&source&&source!==eventCurrency);
+ return !!(Number(expense?.sourceAmount)>0&&(!source||source!==eventCurrency));
 }
 export function isCurrencyConversionPending(expense,eventCurrency='EUR'){
  return requiresCurrencyConversion(expense,eventCurrency)&&
   (!expense.conversionConfirmed||!(Number(expense.amount)>0));
 }
+export function originalAmountDisplay(expense){
+ const n=Number(expense?.sourceAmount||0);
+ const unit=String(expense?.sourceCurrency||'');
+ if(!unit)return n.toFixed(2)+' (měna nerozpoznána)';
+ try{return new Intl.NumberFormat('cs-CZ',{style:'currency',currency:unit,maximumFractionDigits:2}).format(n)}
+ catch{return n.toFixed(2)+' '+unit}
+}
 export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan=false}={}){
  const sourceCurrency=found.sourceCurrency||null;
  const sourceAmount=Number(found.sourceAmount||0)>0?Number(found.sourceAmount):null;
- const conversionRequired=!!(sourceCurrency&&sourceAmount&&sourceCurrency!==eventCurrency);
+ const conversionRequired=!!(sourceAmount&&(!sourceCurrency||sourceCurrency!==eventCurrency));
  const priorConfirmed=rescan&&!!expense.conversionConfirmed&&Number(expense.amount)>0;
  const amount=conversionRequired?(priorConfirmed?Number(expense.amount):0):
   rescan&&Number(expense.amount)>0?Number(expense.amount):Number(found.amount||0);
