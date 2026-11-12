@@ -3,6 +3,7 @@
 import {getOne} from './localdb.js';
 import {downloadBlob} from './archive.js';
 import {safeFilename,expenseStatus} from './utils.mjs';
+import {receiptItemLabel} from './zsl-template-map.mjs';
 
 function ascii(value){
  return String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -62,6 +63,7 @@ export async function buildAttachmentsPdf({event,expenses,documents=async id=>ge
   const e=ordered[i];
   const label='DOKLAD '+(i+1)+' / '+ordered.length;
   notePage(pdf,font,label,[
+    'Polozka: '+receiptItemLabel(e),
     'Dodavatel: '+(e.merchant||e.receipt_name||'Neurceno'),
     'Datum: '+(e.spent_on||'Neurceno'),
     'Suma: '+Number(e.amount||0).toFixed(2)+' '+(event?.currency||'EUR'),
