@@ -369,7 +369,7 @@ function App(){
       <div className="heading"><h3>Účtenky</h3><span className="muted">{expenses.length} dokladů</span></div>
       {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
       {expenses.map(e=><div className="expense" key={e.id}>
-        <div className="expense-top"><div><strong>{e.merchant||e.receipt_name||'Doklad'}</strong><small>{showDate(e.spent_on)} · {CATEGORIES.find(c=>c.id===e.category)?.label||'Ostatní'}</small></div><b>{currency(e.amount,active.currency)}</b></div>
+        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{currency(e.amount,active.currency)}</b></div>
         <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed&&!e.ocr.autoReady} ok={!!e.ocr.reviewed||!!e.ocr.autoReady}>{e.ocr.reviewed?'Ručně upraveno':e.ocr.autoReady?'Automaticky načteno':'Zkontrolovat OCR ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
           <Button small secondary onClick={()=>setEditing(e)}>Upravit</Button>
