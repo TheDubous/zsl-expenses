@@ -74,8 +74,8 @@ export function exportExpenseReadiness(expense,event){
   const issues=[],warnings=[],section=recommendedZslSection(expense,event);
   const name=expense.merchant||expense.receipt_name||'Neznámá účtenka';
   if(!expense.receipt_path)issues.push('chybí fotografie nebo PDF účtenky');
-  if(Number(expense.sourceAmount)>0 && expense.sourceCurrency && expense.sourceCurrency!=='EUR' && !expense.conversionConfirmed)
-    issues.push('PDF je v '+expense.sourceCurrency+' ('+expense.sourceAmount+'); doplň skutečně přepočtenou částku v EUR');
+  if(Number(expense.sourceAmount)>0 && expense.sourceCurrency!=='EUR' && !expense.conversionConfirmed)
+    issues.push('PDF je v '+(expense.sourceCurrency||'neznámé měně')+' ('+expense.sourceAmount+'); doplň správnou částku v EUR');
   if(!(Number(expense.amount)>0))issues.push(Number(expense.sourceAmount)>0?
     'částka v EUR zatím není zadaná – původní cenu z PDF do ZSL nepřepisujeme':'chybí ověřená částka');
   if(!String(expense.merchant||'').trim())issues.push('chybí dodavatel');
