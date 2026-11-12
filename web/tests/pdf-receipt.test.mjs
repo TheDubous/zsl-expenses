@@ -71,11 +71,11 @@ test('converted EUR must be provided before a 1469 CZK ticket can appear in ZSL 
 });
 test('PDF with only page prices must not invent an additional summed total',()=>{
  const result=parsePdfReceiptPages(pages.slice(0,2));
- assert.equal(result.sourceAmount,498); // one reported subtotal, not the combined invoice
- assert.equal(result.sourceCurrency,'CZK');
+ assert.equal(result.sourceAmount,null); // no aggregate tax receipt: avoid inventing a final amount
+ assert.equal(result.sourceCurrency,null);
  assert.equal(result.pdfPages,2);
  assert.equal(result.pdfHasInvoice,false);
- assert.equal(result.needsReview,false);
+ assert.equal(result.needsReview,true);
 });
 test('empty text PDF is not fabricated as a zero price',()=>{
  const r=parsePdfReceiptPages(['','']);
