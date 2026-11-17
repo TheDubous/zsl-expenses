@@ -32,3 +32,8 @@ test('unrelated prices, payment records and date fragments are never summed',()=
 test('actual thermal OCR may insert space before decimal comma in VAT base',()=>{
  assert.deepEqual(amounts('MUST B 20% VON 106 ,48 21,30'),[127.78]);
 });
+
+test('dot-decimal receipt amounts also reconcile without x100 mistakes',()=>{
+ assert.deepEqual(amounts('St Satz Netto USt Brutto\n1 20% 80.67 16.13 96.80'),[96.8]);
+ assert.deepEqual(amounts('VAT 20% OF 106.48 21.30'),[127.78]);
+});
