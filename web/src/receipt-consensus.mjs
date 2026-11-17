@@ -83,27 +83,39 @@ export function combineReceiptPasses(passes){
   const merchantConflict=!!(merchant&&merchants[1]&&
     merchants[1].score>=merchant.score-4&&
     compactText(merchants[1].name)!==compactText(merchant.name));
-  // Only a competing printed total/payment can create an amount conflict.
-  // Item prices, tax, change and partial reads are not other grand totals.
-  const amountConflict=!!(competingMath||(best&&amounts.some(x=>x.amount!==best.amount&&
-    hasPrintedEvidence(x)&&(
-      x.score>=best.score-8 ||
-      // When independently reconciled arithmetic and OCR disagree, a
-      // transcription error is likely. Suggest the arithmetic but flag it.
-      !!arithmeticWinner ||
-      (x.paidPassNames.length>0&&best.totalPassNames.length>0) ||
-      (x.totalPassNames.length>0&&best.paidPassNames.length>0) ||
-      (x.totalPassNames.length>0&&best.totalPassNames.length>0&&
-       x.score>=best.score-16)
-    ))));
+  // Distinguish genuinely competing totals from a *single* obvious OCR
+  // error. Previously every alternative, even a tax value supported in one
+  // damaged pass, became a conflict whenever mathEvidence existed. That
+  // blocked 96.80 (score 120 vs 32) and 111.60 (109 vs 30).
+  const isolatedOutlier=x=>!!(arithmeticWinner===best&&
+    (best.mathEvidence.length>0||best.grossPassNames.length>0)&&
+    best.score>=x.score+25&&best.passNames.length>=3&&
+    x.passNames.length<=2&&x.totalPassNames.length<=1&&
+    x.paidPassNames.length===0&&x.mathEvidence.length===0);
+  const competingPrinted=amounts.filter(x=>best&&x.amount!==best.amount&&
+    hasPrintedEvidence(x)&&!isolatedOutlier(x));
+  const amountConflict=!!(competingMath||competingPrinted.some(x=>
+    x.score>=best.score-8||
+    (x.totalPassNames.length>0&&best.totalPassNames.length>0)||
+    (x.paidPassNames.length>0&&best.totalPassNames.length>0)||
+    (x.totalPassNames.length>0&&best.paidPassNames.length>0)
+  ));
+  // If several different crops see the same printed grand total while a
+  // single noisy crop reads a conflicting total (e.g. 615 vs 619), prefill
+  // the well-supported result for human review, never green auto approval.
+  const printedAlternatives=competingPrinted.filter(x=>x.totalPassNames.length>0);
+  const evidenceSuggestion=!!(!arithmeticWinner&&!competingMath&&amountConflict&&
+    best?.totalPassNames.length>0&&best.passNames.length>=3&&
+    printedAlternatives.length>0&&
+    printedAlternatives.every(x=>x.passNames.length===1&&best.score>=x.score+8));
   const verifiedTotal=!!(best&&best.totalPassNames.length&&best.paidPassNames.length&&
     new Set([...best.totalPassNames,...best.paidPassNames]).size>=2&&!amountConflict);
-  // Mathematics is useful to recover a proposed price, not to prove a
-  // transaction by itself. Require human approval before accounting export.
+  // Calculations remain a proposal if they cannot be independently confirmed
+  // by printed payment evidence. Accounting export still requires review.
   const arithmeticSuggestion=!!(arithmeticWinner&&best===arithmeticWinner&&!verifiedTotal);
   const supported=!!(best&&(hasPrintedEvidence(best)||best.mathEvidence.length>0));
   const amountConfidence=!supported||competingMath?'low':
-    amountConflict?(arithmeticSuggestion?'medium':'low'):
+    amountConflict?(arithmeticSuggestion||evidenceSuggestion?'medium':'low'):
     verifiedTotal?'high':'medium';
   const merchantConfidence=!merchant||merchant.score<24?'low':merchantConflict?'low':merchant.score>=47?'high':'medium';
   // If two supplier guesses compete, do not silently select either.
@@ -113,8 +125,9 @@ export function combineReceiptPasses(passes){
   }
   const rawText=whole.map(x=>x.parsed.rawText).filter(Boolean).join('\n\n--- další průchod OCR ---\n\n').slice(0,16000);
   return {
-    amount:!competingMath&&best?.score>=7&&supported&&(!amountConflict||arithmeticSuggestion)?best.amount:null,
-    arithmeticSuggestion,totalVerified:verifiedTotal,amountConflict,
+    amount:!competingMath&&best?.score>=7&&supported&&
+      (!amountConflict||arithmeticSuggestion||evidenceSuggestion)?best.amount:null,
+    arithmeticSuggestion,evidenceSuggestion,totalVerified:verifiedTotal,amountConflict,
     amountCandidates:amounts,
     confidence:amountConfidence,
     merchant:topMerchant,merchantCandidates:merchants,merchantConfidence,
