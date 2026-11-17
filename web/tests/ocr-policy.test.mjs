@@ -8,17 +8,17 @@ const result=()=>combineReceiptPasses([
  {kind:'normal',text:'GUTMANN GmbH\n03.11.2026\nDIESEL\nZAHLUNG GESAMTBETRAG 127,78 EUR'}
 ]);
 const weak={amount:0,confidence:'low',merchant:null,merchantConfidence:'low',spent_on:null};
-test('maximum accuracy is adaptive and limited to six passes with a soft 90s budget',()=>{
+test('maximum quality prioritizes original full-width totals and stays within the 90s budget',()=>{
  assert.equal(maxOcrPasses('max'),6);
  assert.equal(ocrConfig('max').budgetMs,90000);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:[]}), 'focused');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused']}),'middle');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle'],result:weak}),'payment');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','payment'],result:weak}),'bottom');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','payment','bottom'],result:weak}),'header');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','payment','bottom','header'],result:weak}),'normal');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','payment','bottom','header','normal'],result:weak}),null);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],result:weak,elapsedMs:90000}),null);
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:[]}), 'totals');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],result:weak}),'normal');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal'],result:weak}),'header');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header'],result:weak}),'payment');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment'],result:weak}),'bottom');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','bottom'],result:weak}),'focused');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','bottom','focused'],result:weak}),null);
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],result:weak,elapsedMs:90000}),null);
 });
 test('two good reads receive an independent footer verification in maximum mode',()=>{
  const read=result();
@@ -26,7 +26,7 @@ test('two good reads receive an independent footer verification in maximum mode'
  assert.equal(read.merchant,'Gutmann');
  assert.equal(read.spent_on,'2026-11-03');
  assert.equal(isOcrCertain(read),false);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],result:read}),'middle');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],result:read}),'totals');
  const verified=combineReceiptPasses([
   {kind:'focused',text:'GUTMANN GmbH\n03.11.2026\nDIESEL\nGESAMTBETRAG 127,78 EUR'},
   {kind:'normal',text:'GUTMANN GmbH\n03.11.2026\nDIESEL\nGESAMTBETRAG 127,78 EUR'},
@@ -39,14 +39,14 @@ test('single pass and incomplete data never claim maximum certainty',()=>{
  assert.equal(isOcrCertain(once),false);
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],
    result:{...once,amount:127.78,confidence:'high',merchant:'Slovnaft',merchantConfidence:'high',
-     amountCandidates:[{amount:127.78,passNames:['normal']}]} }),'middle');
+     amountCandidates:[{amount:127.78,passNames:['normal']}]} }),'totals');
 });
-test('weak amount prioritizes footer while weak vendor prioritizes header',()=>{
- const amountGood={amount:50,confidence:'high',merchant:null,merchantConfidence:'low',spent_on:'2026-11-03'};
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle'],result:amountGood}),'payment');
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle','payment'],result:amountGood}),'header');
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle'],result:weak}),'payment');
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle','payment'],result:weak}),'bottom');
+test('missing supplier triggers header after total and full-image reads',()=>{
+ const amountGood={amount:50,confidence:'medium',merchant:null,merchantConfidence:'low',spent_on:'2026-11-03'};
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:['totals','normal'],result:amountGood}),'header');
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:['totals','normal','header'],result:amountGood}),'payment');
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:['totals','normal'],result:weak}),'header');
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:['totals','normal','header'],result:weak}),'payment');
 });
 test('fast and precise modes remain available and avoid maximum OCR language overhead',()=>{
  assert.equal(chooseOcrPass({mode:'fast',band:true,passes:[]}), 'normal');
@@ -61,7 +61,7 @@ test('two agreeing item prices do not stop OCR without a recognized paid total',
  merchantConfidence:'high',spent_on:'2026-11-03',
  amountCandidates:[{amount:613,score:22,isTotal:false,passNames:['focused','normal']}]};
  assert.equal(isOcrCertain(r),false);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],result:r}),'middle');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],result:r}),'totals');
 });
 
 test('repeated OCR digit error is not accepted before independent amount verification',()=>{
@@ -70,7 +70,7 @@ test('repeated OCR digit error is not accepted before independent amount verific
   {kind:'normal',text:'Pitztaler Gletscherbahn\n03.11.2026\nGesamt EUR 660,00'}]);
  assert.equal(first.amount,660);
  assert.equal(isOcrCertain(first),false);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],result:first}),'middle');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],result:first}),'totals');
  const checked=combineReceiptPasses([
   {kind:'focused',text:'Pitztaler Gletscherbahn\n03.11.2026\nGesamt EUR 660,00'},
   {kind:'normal',text:'Pitztaler Gletscherbahn\n03.11.2026\nGesamt EUR 660,00'},
@@ -79,7 +79,21 @@ test('repeated OCR digit error is not accepted before independent amount verific
  assert.equal(checked.confidence,'low');
 });
 
-test('maximum-quality scan gives the short middle crop priority before a second full image',()=>{
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused'],elapsedMs:45000}), 'middle');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle'],result:{amount:111.6,confidence:'high',merchant:'Steinblock GmbH',merchantConfidence:'high',spent_on:'2026-11-13'}}),'payment');
+test('Steinblock IMG8111 sum region cannot be deferred past first slow full-image pass',()=>{
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:[]}), 'totals');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],elapsedMs:45000}), 'normal');
+ const one=combineReceiptPasses([{kind:'totals',text:
+  'Gesamt EUR 96,80\\nSt Satz Netto USt Brutto\\nGesamt: 80,67 16,13 96,80\\nEFT EUR 96,80'}]);
+ assert.equal(one.amount,96.8);
+ assert.equal(one.totalVerified,false);
+ assert.equal(one.confidence,'medium');
+ const both=combineReceiptPasses([
+  {kind:'totals',text:'Gesamt EUR 96,80\\nGesamt: 80,67 16,13 96,80\\nEFT EUR 96,80'},
+  {kind:'normal',text:'Steinblock GmbH\\n09.11.2026\\nGesamt EUR 96,80\\nBezahlt: EFT EUR 96,80'}
+ ]);
+ assert.equal(both.amount,96.8);
+ assert.equal(both.totalVerified,true);
+ assert.equal(both.spent_on,'2026-11-09');
+ assert.equal(isOcrCertain(both),true);
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal'],result:both}),null);
 });
