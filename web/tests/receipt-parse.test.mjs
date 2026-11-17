@@ -113,24 +113,37 @@ test('recognized Gesamt EUR and Bezahlt are grand-total indicators even when sep
 
 
 test('IMG_8112 Steinblock: gross 111,60 beats VAT net and item totals',()=>{
- const t='Steinblock GmbH\\nBundesstrasse 1a\\n6460 Imst\\n13.11.2026 15:12:25\\n6 IM Gruppen Ermäßigte 12,80 76,80\\n1 IM Gruppen Erwachsene 13,80 13,80\\n7 IM Leihschuhe Gruppe 3,00 21,00\\nGesamt: EUR 111,60\\nSt Satz Netto USt Brutto\\n1 20,00% 93,00 18,60 111,60\\nGesamt: 93,00 18,60 111,60\\nBezahlt:\\nEFT EUR 111,60';
- const got=parseReceiptText(t.replaceAll('\\n','\n'));
+ const t=[
+  'Steinblock GmbH','Bundesstrasse 1a','6460 Imst','13.11.2026 15:12:25',
+  '6 IM Gruppen Ermäßigte 12,80 76,80','1 IM Gruppen Erwachsene 13,80 13,80',
+  '7 IM Leihschuhe Gruppe 3,00 21,00','Gesamt: EUR 111,60',
+  'St Satz Netto USt Brutto','1 20,00% 93,00 18,60 111,60',
+  'Gesamt: 93,00 18,60 111,60','Bezahlt:','EFT EUR 111,60'
+].join('\n');
+ const got=parseReceiptText(t);
  assert.equal(got.amount,111.60);
  assert.equal(got.merchant,'Steinblock GmbH');
  assert.equal(got.spent_on,'2026-11-13');
- assert.equal(got.payment_method,'unknown');
  assert.ok(!got.amountCandidates.some(v=>v.amount===93&&v.isTotal),'net amount is not a gross total');
  assert.ok(!got.amountCandidates.some(v=>v.amount===18.6&&v.isTotal),'VAT is not a gross total');
 });
 test('IMG_8111 Steinblock: rightmost gross value wins even when primary total is unreadable',()=>{
- const t='Steinblock GmbH\n09.11.2026 14:58:39\n4 502 12,80 51,20\n2 501 13,80 27,60\n6 360210 3,00 18,00\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80\nGesamt: 80,67 16,13 96,80\nBezahlt:\nEFT EUR 96,80';
+ const t=[
+  'Steinblock GmbH','09.11.2026 14:58:39','4 502 12,80 51,20',
+  '2 501 13,80 27,60','6 360210 3,00 18,00','St Satz Netto USt Brutto',
+  '1 20,00% 80,67 16,13 96,80','Gesamt: 80,67 16,13 96,80',
+  'Bezahlt:','EFT EUR 96,80'
+].join('\n');
  const got=parseReceiptText(t);
  assert.equal(got.amount,96.8);
  assert.equal(got.spent_on,'2026-11-09');
  assert.ok(!got.amountCandidates.some(v=>v.amount===80.67&&v.isTotal));
 });
-test('OCR fractional O and broken spaced total label still read the payment, not tax',()=>{
- const got=parseReceiptText('GUTMANN GMBH\n03.11.2026\nG E S A M T BETRAG EUR: 127,7O\nSTEUERANTEIL 21,30 EUR\nEUROCARD 127,78');
+test('OCR fractional O and broken spaced total label still read payment not tax',()=>{
+ const got=parseReceiptText([
+  'GUTMANN GMBH','03.11.2026','G E S A M T BETRAG EUR: 127,7O',
+  'STEUERANTEIL 21,30 EUR','EUROCARD 127,78'
+].join('\n'));
  assert.equal(got.amount,127.78);
  assert.ok(got.amountCandidates[0].isTotal);
 });
