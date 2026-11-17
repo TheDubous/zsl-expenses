@@ -128,10 +128,23 @@ export function combineReceiptPasses(passes){
   // single noisy crop reads a conflicting total (e.g. 615 vs 619), prefill
   // the well-supported result for human review, never green auto approval.
   const printedAlternatives=competingPrinted.filter(x=>x.totalPassNames.length>0);
-  const evidenceSuggestion=!!(!arithmeticWinner&&!competingMath&&amountConflict&&
-    best?.totalPassNames.length>0&&best.passNames.length>=3&&
-    printedAlternatives.length>0&&
-    printedAlternatives.every(x=>x.passNames.length===1&&best.score>=x.score+8));
+  // A faded card-terminal digit can read 616 in one crop while another
+  // crop reads Gesamt 615 and MasterCard 615. This is not safe for automatic
+  // approval, but it IS enough to prefill 615 for explicit human review.
+  // Do not use this when competing real payment totals have similar support.
+  const weakPaymentAlternative=!!(best&&best.passNames.length>=2&&
+    best.totalPassNames.length>=1&&best.paidPassNames.length>=1&&
+    competingPrinted.length>0&&
+    competingPrinted.every(x=>x.passNames.length===1&&
+      x.mathEvidence.length===0&&x.grossPassNames.length===0&&
+      x.score<=best.score-20&&
+      x.paidPassNames.length>0&&x.totalPassNames.length===0));
+  const evidenceSuggestion=!!(!arithmeticWinner&&!competingMath&&amountConflict&&(
+    (best?.totalPassNames.length>0&&best.passNames.length>=3&&
+      printedAlternatives.length>0&&
+      printedAlternatives.every(x=>x.passNames.length===1&&best.score>=x.score+8))||
+    weakPaymentAlternative
+  ));
   const verifiedTotal=!!(best&&best.totalPassNames.length&&best.paidPassNames.length&&
     new Set([...best.totalPassNames,...best.paidPassNames]).size>=2&&!amountConflict);
   // Calculations remain a proposal if they cannot be independently confirmed
