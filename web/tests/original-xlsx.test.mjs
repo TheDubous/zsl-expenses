@@ -266,7 +266,7 @@ test('receipt item label classifies specific products with manual correction as 
 });
 
 test('conflicted OCR sum is not written to ZSL XLSX until manually confirmed',()=>{
- const candidate={...expense('steinblock-conflict',96.8),category:'other',
+ const candidate={...expense('steinblock-conflict',96.8),category:'other',zsl_section:'',
   merchant:'Steinblock GmbH',ocr:{reviewed:false,autoReady:false,
     amountConflict:true,arithmeticSuggestion:true}};
  assert.equal(exportExpenseReadiness(candidate,event).canExport,false);
