@@ -46,7 +46,7 @@ function App(){
   const [editingEvent,setEditingEvent]=useState(false);
   const [viewingDoc,setViewingDoc]=useState(null);
   const [ocrProgress,setOcrProgress]=useState('');
-  const [ocrMode,setOcrMode]=useState('precise');
+  const [ocrMode,setOcrMode]=useState('max');
   const [templateInfo,setTemplateInfo]=useState(null);
   const [exportAudit,setExportAudit]=useState(null);
   const [attachmentAudit,setAttachmentAudit]=useState(null);
@@ -178,7 +178,7 @@ function App(){
             setOcrProgress('Čtu doklad '+(i+1)+'/'+uploaded.length+': '+file.name);
             const found=isPdf(file)?
               await recognizePdf(file,{onProgress:setOcrProgress,mode:ocrMode}):
-              await (async()=>{if(!scanner)scanner=await createOCRSession(setOcrProgress);return scanner.scan(file,{mode:ocrMode})})();
+              await (async()=>{if(!scanner)scanner=await createOCRSession(setOcrProgress,{mode:ocrMode});return scanner.scan(file,{mode:ocrMode})})();
             const candidate=mergeRecognizedExpense(expense,found,active.currency);
             await saveExpense(candidate);
             if(isCurrencyConversionPending(candidate,active.currency))pendingFX++;
@@ -213,7 +213,7 @@ function App(){
         }else{
           if(!canRecognize(doc.blob)&&!canRecognize({name:doc.name}))
             throw new Error('Tento typ dokladu nelze automaticky přečíst.');
-          scanner=await createOCRSession(setOcrProgress);
+          scanner=await createOCRSession(setOcrProgress,{mode:ocrMode});
           found=await scanner.scan(doc.blob,{mode:ocrMode});
         }
         const candidate=mergeRecognizedExpense(expense,found,active.currency,{rescan:true});
@@ -355,14 +355,15 @@ function App(){
   function Documents(){
     return <div className="stack">
       <div className="panel"><div className="heading"><h3>1. Nahraj účtenky</h3><Camera size={20}/></div>
-        <p className="muted">Aplikace se pokusí přečíst částku, dodavatele, datum a stručnou položku (Diesel, AdBlue, Skipas, Startovné…). <strong>Důkladný režim</strong> čte účtenku několikrát a zvlášť analyzuje její horní část. Je pomalejší, ale může zlepšit rozpoznání špatně vytištěných dokladů. Výsledky vždy zkontroluj.</p>
+        <p className="muted">Aplikace načte částku, dodavatele, datum a stručnou položku. <strong>Maximální přesnost</strong> používá češtinu, slovenštinu, němčinu a angličtinu a porovnává různé úpravy fotografie. Doplňkové čtení spodní části (součty) nebo hlavičky (dodavatel) spustí jen podle potřeby; po dosažení spolehlivého výsledku skončí dřív. Výsledek vždy můžeš upravit.</p>
         <div className="ocr-mode-picker">
           <label htmlFor="ocr-mode">Způsob rozpoznávání</label>
           <select id="ocr-mode" value={ocrMode} disabled={busy} onChange={e=>setOcrMode(e.target.value)}>
-            <option value="precise">Důkladné – více průchodů (doporučeno)</option>
-            <option value="fast">Rychlé – základ + hlavička</option>
+            <option value="max">Maximální přesnost – chytré kontrolní průchody (doporučeno)</option>
+            <option value="precise">Důkladné – méně průchodů</option>
+            <option value="fast">Rychlé – základní čtení</option>
           </select>
-          <small>OCR běží přímo na telefonu. První použití potřebuje internet k načtení jazykových dat. PDF s textem se čte automaticky ze všech stran. U naskenovaného PDF se použije OCR. Vše zůstává v telefonu.</small>
+          <small>OCR běží v telefonu. Čtení má omezený počet průchodů a po přibližně 75 sekundách už nezačíná další kontrolu (probíhající průchod může doběhnout déle). První načtení jazyků vyžaduje internet; další použití je obvykle rychlejší. Textová PDF se čtou přímo, skenovaná pomocí OCR.</small>
         </div>
         <div className="upload-row">
           <label className="btn filebtn"><Upload size={17}/> Více účtenek<input type="file" accept="image/*,application/pdf" multiple disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>
@@ -553,7 +554,7 @@ function App(){
             {(editing.ocr.amountCandidates||[]).length>0&&<div className="ocr-candidates">Rozpoznané částky: {editing.ocr.amountCandidates.map((c,i)=>c.currency&&c.currency!==(active?.currency||'EUR')?
               <span className="muted smalltext" key={i}>{currency(c.amount,c.currency||'EUR')} (cizí měna – nelze vložit jako EUR)</span>:
               <button key={i} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,c.currency||active?.currency||'EUR')}</button>)}</div>}
-            <details><summary>Zobrazit rozpoznaný text ({(editing.ocr.scannedPasses||[]).length||1} průchody)</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
+            <details><summary>Zobrazit rozpoznaný text ({(editing.ocr.scannedPasses||[]).length||1} průchody · {editing.ocr.ocrLanguage||'automaticky'})</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
           </div>}
           <p className="muted smalltext">Bankovní potvrzení můžeš přiložit později v seznamu dokladů. Změna způsobu platby z karty odstraní původní bankovní přílohu.</p>
           <Button type="submit" disabled={busy}><Check size={17}/> Uložit změny</Button>
