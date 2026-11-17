@@ -58,24 +58,40 @@ function parseNumber(value){
 }
 function moneyCandidates(lines){
   const values=[];
-  lines.forEach((line,index)=>{
-    // Thermal printers often letter-space headings: G E S A M T BETRAG.
-    // Compare a normalized label as well as the OCR's original spacing.
-    const compactLabel=line.replace(/\s+/g,'');
+  const totalLabel=line=>{
+    const compact=line.replace(/[\\s:._-]+/g,'');
+    // Dot-matrix printers space individual characters: G E S A M T BETRAG.
+    return totalHints.test(line)||
+      /(?:gesamtbetrag|gesamtsumme|gesamt|zw\\.?-?summe|summe|bezahlt|endbetrag|eurocard|total)(?:eur|euro|€|\\d)/i.test(compact);
+  };
+  lines.forEach((original,index)=>{
+    // OCR can mistake the last decimal zero for O or insert a space after the
+    // decimal separator. Correct ONLY a two-character fractional part.
+    const line=original.replace(/(\\d[,.])\\s*([0-9OoIl]{2})(?![\\dA-Za-z])/g,
+      (_,prefix,fraction)=>prefix+fraction.replace(/[Oo]/g,'0').replace(/[Il]/g,'1'));
     const matches=[...line.matchAll(amountPattern)];
-    if(/\b\d{1,2}\.\d{1,2}\.20\d{2}\b/.test(line)&&!totalHints.test(line))return;
-    for(const m of matches){
+    if(/\\b\\d{1,2}\\.\\d{1,2}\\.20\\d{2}\\b/.test(line)&&!totalLabel(line))return;
+    const prev=lines[index-1]||'';
+    const explicitTotal=totalLabel(line);
+    const paidLine=/\\b(?:eft|kreditkarte|eurocard|card\\s*payment|kartenzahlung)\\b/i.test(line);
+    const inheritedTotal=totalLabel(prev);
+    // A tax breakdown often prints 'Gesamt: NETTO  USt  BRUTTO' with three
+    // numbers on the next line. Only the rightmost BRUTTO is the paid total.
+    const taxHeader=lines.slice(Math.max(0,index-3),index).join(' ');
+    const taxSummary=matches.length>=3&&explicitTotal&&
+      /netto[\\s\\S]{0,50}(?:u\\s*st|mwst|vat|steuer)[\\s\\S]{0,50}brutto/i.test(taxHeader);
+    const selected=taxSummary?[matches[matches.length-1]]:matches;
+    for(const m of selected){
       const amount=parseNumber(m[0]);
       if(!Number.isFinite(amount)||amount<=0||amount>100000)continue;
-      const prev=lines[index-1]||'';
-      const isBad=penalized.test(line)||(penalized.test(prev)&&!totalHints.test(line));
-      // "Ihre Ersparnis" is NOT the amount paid. It can follow "Summe"; never
-      // inherit that total label for a discount line or an unlabeled savings value.
+      const isBad=penalized.test(line)||(penalized.test(prev)&&!explicitTotal&&!paidLine);
       if(isBad)continue;
-      const isTotal=totalHints.test(line)||totalHints.test(prev)||totalHints.test(compactLabel)||totalHints.test(prev.replace(/\s+/g,''));
-      const hasCurrency=/(?:\bEUR\b|\bEURO\b|\bCZK\b|\bKČ\b|\bCHF\b|€)/i.test(line);
-      const score=(isTotal?12:0)+(hasCurrency?3:0)-(isBad?14:0)+(matches.length===1?2:0)+(index>lines.length/3?1:0);
-      values.push({amount,score,line,lineNumber:index,isTotal,isPaid:/\b(?:bezahlt|gesamt|gesamtbetrag|celkom|spolu|suma|k\s*uhrade|total|summe|endbetrag)\b/i.test(compactLabel)});
+      const isTotal=explicitTotal||inheritedTotal||paidLine;
+      const hasCurrency=/(?:\\bEUR\\b|\\bEURO\\b|\\bCZK\\b|\\bKČ\\b|\\bCHF\\b|€)/i.test(line);
+      const score=(explicitTotal?16:paidLine?12:inheritedTotal?11:0)+
+        (hasCurrency?3:0)+(matches.length===1?2:0)+(index>lines.length/3?1:0)+(taxSummary?3:0);
+      values.push({amount,score,line,lineNumber:index,isTotal,isPaid:explicitTotal||paidLine,
+        explicitTotal,paidLine,taxSummary});
     }
   });
   const counts=new Map();
