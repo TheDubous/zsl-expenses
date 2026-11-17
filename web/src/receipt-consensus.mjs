@@ -113,9 +113,16 @@ export function combineReceiptPasses(passes){
     b.score-a.score||b.amount-a.amount).slice(0,8);
   const best=amounts[0]||null;
   const merchant=merchants[0]||null;
+  const isNestedBrand=(a,b)=>!!(a&&b&&a.source==='known-brand'&&
+    b.source==='known-brand'&&
+    (compactText(a.name).includes(compactText(b.name))||
+     compactText(b.name).includes(compactText(a.name))));
+  // INTERSPAR and SPAR are not two competing suppliers when the more
+  // specific banner appears on the very same receipt.
   const merchantConflict=!!(merchant&&merchants[1]&&
     merchants[1].score>=merchant.score-4&&
-    compactText(merchants[1].name)!==compactText(merchant.name));
+    compactText(merchants[1].name)!==compactText(merchant.name)&&
+    !isNestedBrand(merchant,merchants[1]));
   // Distinguish genuinely competing totals from a *single* obvious OCR
   // error. Previously every alternative, even a tax value supported in one
   // damaged pass, became a conflict whenever mathEvidence existed. That
