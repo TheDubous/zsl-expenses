@@ -1,3 +1,4 @@
+import {analyzeVatTable} from './receipt-vat.mjs';
 // Deterministic, offline OCR interpretation. We retain alternative readings for human review.
 const totalHints=/(?:^|\b)(?:celkom(?:\s*-\s*eft)?|spolu|suma|total|amount|k\s*uhrade|na\s*uhradu|zaplaten[ée]|uhradene|uhradené|gesamt\s*betrag|gesamtsumme|gesamt|(?:zw\.?\s*-?\s*)?summe|betrag|bezahlt|zahlung|eurocard|gesamtbetrag|paid|endbetrag)(?:\b|:)/i;
 const penalized=/(?:dph|vat|tax|zaklad|základ|netto|base|jednotkov|vr[aá]ten[ée]|cash\s*back|wechselgeld|rueckgeld|rückgeld|bargeld|gegeben|rueckgabe|rabatt|z[ľl]ava|discount|zostatok|m[wvv]st|ust\.?|ersparnis|ersparniss|ersparn|gespart|sie\s+sparen|sparen\s+sie|nachlass|gutschein|savings?|your\s+savings?|vorteil|steueranteil|preis\s*\/\s*l|pro\s*liter|ak.tionsrabatt)/i;
@@ -59,10 +60,12 @@ function parseNumber(value){
 }
 function moneyCandidates(lines){
   const values=[];
+  const vat=analyzeVatTable(lines);
+  const vatRows=new Set(vat.rows.map(row=>row.index));
   const totalLabel=line=>{
     const compact=line.replace(/[\s:._-]+/g,'');
     // Dot-matrix printers space individual characters: G E S A M T BETRAG.
-    return totalHints.test(line)||
+    return totalHints.test(line.normalize('NFKD').replace(/[\u0300-\u036f]/g,''))||
       /(?:gesamtbetrag|gesamtsumme|gesamt|zw\.?-?summe|summe|bezahlt|endbetrag|eurocard|total)(?:eur|euro|€|\d)/i.test(compact);
   };
   lines.forEach((original,index)=>{
@@ -86,9 +89,10 @@ function moneyCandidates(lines){
     const explicitTotal=totalLabel(line);
     // "Kreditkarle MasterCard" is common on folded receipts: card network
     // and printed paid totals are evidence even if Kreditkarte is misspelled.
-    const paymentLabel=/\b(?:eft|kreditkart\w*|kreditkarl\w*|eurocard|mastercard|visa|card\s*payment|kartenzahlung|bezahlt|zaplaten[eé]?|paid)\b/i;
+    const paymentLabel=/\b(?:eft|kreditkart\w*|kreditkarl\w*|eurocard|mastercard|visa|card\s*payment|kartenzahlung|bezahlt|zaplaten[eé]?|paid|uhradene|bankova\s+karta|zahlung\s+visa)\b/i;
+    const cleanLabel=value=>value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'');
     const continuedPayment=/^(?:(?:EUR|EURO|€)\s*)?\d[\d\s.,]*(?:\s*(?:EUR|EURO|€))?\s*$/i.test(line)&&matches.length===1;
-    const paidLine=paymentLabel.test(line)||(continuedPayment&&paymentLabel.test(prev));
+    const paidLine=paymentLabel.test(cleanLabel(line))||(continuedPayment&&paymentLabel.test(cleanLabel(prev)));
     const inheritedTotal=totalLabel(prev);
     // A tax breakdown often prints 'Gesamt: NETTO  USt  BRUTTO' with three
     // numbers on the next line. Only the rightmost BRUTTO is the paid total.
@@ -104,7 +108,9 @@ function moneyCandidates(lines){
     const taxValues=matches.slice(-3).map(m=>parseNumber(m[0]));
     const reconcilesTax=taxValues.length===3&&taxValues.every(Number.isFinite)&&
       Math.abs(Math.round(taxValues[0]*100)+Math.round(taxValues[1]*100)-Math.round(taxValues[2]*100))<=1;
-    const taxRowGross=matches.length>=3&&hasTaxColumns&&reconcilesTax;
+    // Only a single-rate VAT row can be the whole gross. Supermarket
+    // multi-rate rows are individual tax-class subtotals, never grand totals.
+    const taxRowGross=vatRows.has(index)&&!vat.multiRate&&reconcilesTax;
     const summaryColumns=matches.length>=2&&explicitTotal&&/\b(?:gesamt|total|spolu|suma|celkom)\b/i.test(line);
     // "Gesamt: 93,00 18,60 11160" has a damaged gross column with
     // missing decimal separator. 18,60 is VAT, NOT a new grand total.
@@ -113,8 +119,16 @@ function moneyCandidates(lines){
     // Even a damaged VAT row should not turn the base/tax components
     // into candidate payments merely because the column header says "Spolu".
     const taxColumnsUnreconciled=hasTaxColumns&&matches.length>=3&&!reconcilesTax;
-    const selected=(damagedGrossColumn||taxColumnsUnreconciled)?[]:
-      (taxSummary||summaryColumns||taxRowGross)?[matches[matches.length-1]]:matches;
+    const vatNearby=lines.slice(Math.max(0,index-4),Math.min(lines.length,index+4)).join(' ');
+    // In the real Slovnaft scan the line "Spolu 107.59 24 15 : 132 34"
+    // lost two decimal separators. Do not promote its surviving base amount
+    // to a total just because the line starts with "Spolu".
+    const brokenTaxSummary=explicitTotal&&/\b(?:spolu|gesamt)\b/i.test(line)&&
+      /z[aá]klad[\s\S]{0,65}dph[\s\S]{0,65}spolu/i.test(vatNearby)&&
+      matches.length<3&&(line.match(/\d+/g)||[]).length>=3;
+    const taxClassRow=vat.multiRate&&vatRows.has(index);
+    const selected=(damagedGrossColumn||taxColumnsUnreconciled||brokenTaxSummary)?[]:
+      (taxSummary||summaryColumns||taxRowGross||taxClassRow)?[matches[matches.length-1]]:matches;
     for(const m of selected){
       const amount=parseNumber(m[0]);
       if(!Number.isFinite(amount)||amount<=0||amount>100000)continue;
@@ -122,7 +136,7 @@ function moneyCandidates(lines){
       // a reconciled Brutto value on the following line is legitimate.
       const isBad=penalized.test(line)||(penalized.test(prev)&&!explicitTotal&&!paidLine&&!taxRowGross);
       if(isBad)continue;
-      const isTotal=explicitTotal||inheritedTotal||paidLine||taxRowGross;
+      const isTotal=explicitTotal||(inheritedTotal&&!taxClassRow)||paidLine||taxRowGross;
       const hasCurrency=/(?:\bEUR\b|\bEURO\b|\bCZK\b|\bKČ\b|\bCHF\b|€)/i.test(line);
       const score=(explicitTotal?16:paidLine?12:taxRowGross?11:inheritedTotal?11:0)+
         (hasCurrency?3:0)+(matches.length===1?2:0)+(index>lines.length/3?1:0)+(taxSummary?3:0)-
