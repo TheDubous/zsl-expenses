@@ -46,3 +46,11 @@ test('fast and precise modes remain available and avoid maximum OCR language ove
  assert.equal(maxOcrPasses('precise'),4);
  assert.equal(chooseOcrPass({mode:'precise',band:true,passes:['focused','normal','bottom','header'],result:weak}),null);
 });
+
+test('two agreeing item prices do not stop OCR without a recognized paid total',()=>{
+ const r={amount:613,confidence:'high',merchant:'Pitztaler Gletscherbahn',
+ merchantConfidence:'high',spent_on:'2026-11-03',
+ amountCandidates:[{amount:613,score:22,isTotal:false,passNames:['focused','normal']}]};
+ assert.equal(isOcrCertain(r),false);
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],result:r}),'enhanced');
+});
