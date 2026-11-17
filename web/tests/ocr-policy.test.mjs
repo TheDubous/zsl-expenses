@@ -13,11 +13,11 @@ test('maximum accuracy is adaptive and limited to six passes with a soft 90s bud
  assert.equal(ocrConfig('max').budgetMs,90000);
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:[]}), 'focused');
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused']}),'middle');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle'],result:weak}),'bottom');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','bottom'],result:weak}),'header');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','bottom','header'],result:weak}),'normal');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','bottom','header','normal'],result:weak}),'enhanced');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','bottom','header','normal','enhanced'],result:weak}),null);
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle'],result:weak}),'payment');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','payment'],result:weak}),'bottom');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','payment','bottom'],result:weak}),'header');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','payment','bottom','header'],result:weak}),'normal');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle','payment','bottom','header','normal'],result:weak}),null);
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal'],result:weak,elapsedMs:90000}),null);
 });
 test('two good reads receive an independent footer verification in maximum mode',()=>{
@@ -43,8 +43,10 @@ test('single pass and incomplete data never claim maximum certainty',()=>{
 });
 test('weak amount prioritizes footer while weak vendor prioritizes header',()=>{
  const amountGood={amount:50,confidence:'high',merchant:null,merchantConfidence:'low',spent_on:'2026-11-03'};
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle'],result:amountGood}),'header');
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle'],result:weak}),'bottom');
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle'],result:amountGood}),'payment');
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle','payment'],result:amountGood}),'header');
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle'],result:weak}),'payment');
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:['normal','middle','payment'],result:weak}),'bottom');
 });
 test('fast and precise modes remain available and avoid maximum OCR language overhead',()=>{
  assert.equal(chooseOcrPass({mode:'fast',band:true,passes:[]}), 'normal');
@@ -79,5 +81,5 @@ test('repeated OCR digit error is not accepted before independent amount verific
 
 test('maximum-quality scan gives the short middle crop priority before a second full image',()=>{
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused'],elapsedMs:45000}), 'middle');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle'],result:{amount:111.6,confidence:'high',merchant:'Steinblock GmbH',merchantConfidence:'high',spent_on:'2026-11-13'}}),'bottom');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','middle'],result:{amount:111.6,confidence:'high',merchant:'Steinblock GmbH',merchantConfidence:'high',spent_on:'2026-11-13'}}),'payment');
 });
