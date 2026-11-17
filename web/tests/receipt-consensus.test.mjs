@@ -171,3 +171,82 @@ test('two contradictory arithmetic proofs are not safe to prefill',()=>{
  assert.equal(r.amountConflict,true);
  assert.equal(r.arithmeticSuggestion,false);
 });
+
+test('real diagnostics IMG8111: seven corroborated 96.80 reads beat one 98.80 OCR typo',()=>{
+ const r=combineReceiptPasses([
+  {kind:'totals',text:'Gesamt EUR 96,80\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80'},
+  {kind:'normal',text:'09.11.2026\nGesamt EUR 96,80'},
+  {kind:'payment',text:'Gesamt EUR 98,80\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80\nBezahlt:\nEFT EUR 96,80'},
+  {kind:'items',text:'Gesamt EUR 96,80\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80\nEFT EUR 96,80'},
+  {kind:'focused',text:'St Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80\nGesamt EUR 96,80'},
+  {kind:'middle',text:'Gesamt EUR 96,80'}
+ ]);
+ assert.equal(r.amount,96.8);
+ assert.equal(r.amountConflict,false);
+ assert.equal(r.arithmeticSuggestion,false);
+ assert.ok(r.amountCandidates.some(x=>x.amount===98.8));
+ assert.equal(r.amountCandidates[0].amount,96.8);
+});
+test('real diagnostics IMG8112: broken 11160 gross does not make 18.60 a competing total',()=>{
+ const r=combineReceiptPasses([
+  {kind:'totals',text:'Gesamt EUR 111,60\nSt Satz Netto USt Brutto\n1 20,00% 93,00 18,60 111,60'},
+  {kind:'normal',text:'13.11.2026\nGesamt EUR 111,60\nGesamt: 93,00 18,60 11160'},
+  {kind:'payment',text:'Gesamt EUR 111,60\nBezahlt:'},
+  {kind:'items',text:'Gesamt EUR 111,60'},
+  {kind:'focused',text:'Gesamt EUR 111,60'},
+  {kind:'middle',text:'Gesamt EUR 111,60'}
+ ]);
+ assert.equal(r.amount,111.6);
+ assert.equal(r.amountConflict,false);
+ assert.equal(r.arithmeticSuggestion,true);
+ assert.equal(r.confidence,'medium');
+});
+test('real diagnostics IMG8113: repeated 615 with card proof suggested despite single 619',()=>{
+ const r=combineReceiptPasses([
+  {kind:'totals',text:'SCT PF+ 2,00 2,00\nGesamt EUR 619.00'},
+  {kind:'normal',text:'03.11.2026\n613,00 613,00\nSCT PF+'},
+  {kind:'items',text:'Kreditkarle MasterCard 615,00'},
+  {kind:'bottom',text:'SCT Kind 613,00\nSCT PF+ 2,00\nKreditkarle MasterCard\n615,00'},
+  {kind:'middle',text:'Kreditkarle MasterCard 615,00\nGesamt EUR 615,00'}
+ ]);
+ assert.equal(r.amount,615);
+ assert.equal(r.amountConflict,true);
+ assert.equal(r.arithmeticSuggestion,false);
+ assert.equal(r.evidenceSuggestion,true);
+ assert.equal(r.confidence,'medium');
+ assert.ok(r.amountCandidates.some(x=>x.amount===619));
+});
+test('real diagnostics IMG8114: tax calculation 127.78 still flagged against 127.18 printed',()=>{
+ const r=combineReceiptPasses([
+  {kind:'totals',text:'CELKOM-EFT EUR 127,13'},
+  {kind:'normal',text:'MUST B 20% VON 106,48 21,30'},
+  {kind:'items',text:'GESAMT BETRAG EUR 127,18\nCELKOM-EFT EUR 127.78'},
+  {kind:'tax',text:'MUST B 20% VON 106,48 21,30'}
+ ]);
+ assert.equal(r.amount,127.78);
+ assert.equal(r.amountConflict,true);
+ assert.equal(r.arithmeticSuggestion,true);
+ assert.equal(r.confidence,'medium');
+});
+test('real diagnostics IMG8115 and IMG8116: accepted totals stay conservative in one pass',()=>{
+ const vignette=combineReceiptPasses([
+   {kind:'middle',text:'Zw.-Summe 12,80€\nBezahlt 12,80€\nWechselgeld 0,20€'}
+ ]);
+ assert.equal(vignette.amount,12.8);
+ assert.equal(vignette.amountConflict,false);
+ const piste=combineReceiptPasses([
+   {kind:'middle',text:'PISTEN GEB 650,00 650,00\nKreditkarte MasterCard 650,00\nGesamt EUR 650,00'}
+ ]);
+ assert.equal(piste.amount,650);
+ assert.equal(piste.amountConflict,false);
+ assert.equal(piste.totalVerified,false);
+});
+test('two genuinely different paid totals remain unresolved rather than accepted',()=>{
+ const r=combineReceiptPasses([
+  {kind:'normal',text:'Gesamt EUR 615,00\nMasterCard EUR 615,00'},
+  {kind:'payment',text:'Gesamt EUR 619,00\nMasterCard EUR 619,00'}
+ ]);
+ assert.equal(r.amount,null);
+ assert.equal(r.amountConflict,true);
+ assert.equal(r.evidenceSuggestion,false);
+});
