@@ -37,3 +37,14 @@ test('dot-decimal receipt amounts also reconcile without x100 mistakes',()=>{
  assert.deepEqual(amounts('St Satz Netto USt Brutto\n1 20% 80.67 16.13 96.80'),[96.8]);
  assert.deepEqual(amounts('VAT 20% OF 106.48 21.30'),[127.78]);
 });
+
+test('Slovak tax columns Základ + DPH = Spolu support paid diesel total',()=>{
+ assert.deepEqual(amounts([
+   'Sadzby Základ DPH Spolu',
+   '23% 107.59 24.75 132.34 EUR',
+   'Spolu: 107.59 24.75 132.34 EUR'
+ ].join('\n')),[132.34]);
+});
+test('corrupted Slovak DPH components must not invent a valid gross',()=>{
+ assert.deepEqual(amounts('Sadzby Zaklad DPH Spolu\n23% 107.59 24.15 132.34 EUR'),[]);
+});
