@@ -181,11 +181,28 @@ export function parseReceiptText(text){
   const lines=source.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
   const amounts=moneyCandidates(lines);
   const merchants=merchantSuggestions(lines);
-  const best=amounts[0]||null;
+  // A single OCR pass can contain BOTH "Gesamt 615,00" and
+  // "Kreditkarte 615,00". Keep evidence from both lines when collapsing
+  // equal monetary values; otherwise payment proof is silently discarded.
+  const grouped=new Map();
+  for(const candidate of amounts){
+    const existing=grouped.get(candidate.amount);
+    if(!existing){
+      grouped.set(candidate.amount,{...candidate});
+    }else{
+      existing.isTotal=!!(existing.isTotal||candidate.isTotal);
+      existing.isPaid=!!(existing.isPaid||candidate.isPaid);
+      existing.explicitTotal=!!(existing.explicitTotal||candidate.explicitTotal);
+      existing.paidLine=!!(existing.paidLine||candidate.paidLine);
+      existing.taxSummary=!!(existing.taxSummary||candidate.taxSummary);
+    }
+  }
+  const uniqueAmounts=[...grouped.values()].sort((a,b)=>b.score-a.score||b.amount-a.amount);
+  const best=uniqueAmounts[0]||null;
   return {
     amount:best?.score>=3?best.amount:null,
     confidence:best?.score>=16?'high':best?.score>=7?'medium':'low',
-    amountCandidates:amounts.filter((v,i,a)=>a.findIndex(z=>z.amount===v.amount)===i).slice(0,8),
+    amountCandidates:uniqueAmounts.slice(0,8),
     merchant:merchants[0]?.score>=22?merchants[0].name:null,
     merchantCandidates:merchants,
     merchantConfidence:merchants[0]?.score>=40?'high':merchants[0]?.score>=27?'medium':'low',
