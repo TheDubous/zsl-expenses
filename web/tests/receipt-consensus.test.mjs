@@ -323,3 +323,33 @@ test('two comparably supported competing card payments still require manual reso
  assert.equal(r.evidenceSuggestion,false);
  assert.equal(r.amountConflict,true);
 });
+
+test('real IMG8131 diagnostic: 132.34 must beat a misread 107.59 tax base',()=>{
+ const r=combineReceiptPasses([
+  {kind:'totals',text:'SUM: 132.34 ER\nHRADENE 132.04 EUR'},
+  {kind:'middle',text:'SLOVNAFT, a.s.\n02.11.2026 10:06:32\n107.59 24.75 132.34 EUR\nZáklad DPH Spolu\nBanková karta 132.34 EUR\nUHRADENÉ 132.34 EUR'},
+  {kind:'focused',text:'SLOVNAFT a.s.\nEVO Diesel\n65.810 L 2.011 EUR/L 132.34 23% D\nBanková karta 132.34 EUR\nUHRADENÉ 132.34 EUR'},
+  {kind:'items',text:'107.59 24.75 132.34 EUR\nSpolu 107.59 24 15 : 132 34 ER\nBR cy Ziad DPH Spolu\n23% 107.59 24.75 132.34 EUR\nBanková karta 132.34 EUR\nUHRADENÉ 132.34 EUR'},
+  {kind:'normal',text:'SUMA 132.34 EUR'}
+ ]);
+ assert.equal(r.amount,132.34);
+ assert.equal(r.amountConflict,false);
+ assert.equal(r.merchant,'Slovnaft');
+ assert.equal(r.payment_method,'card');
+ assert.ok(r.amountCandidates[0].mathEvidence.some(x=>x.kind==='vat-columns'));
+ assert.ok(!r.amountCandidates.some(x=>x.amount===107.59&&x.totalPassNames.length>0));
+});
+test('real IMG8132 diagnostic: VAT classes reconcile to paid 55.84, not rival totals',()=>{
+ const r=combineReceiptPasses([
+  {kind:'middle',text:'SPAR\n02.11.2026\nSUMME: 55,84\nZAHLUNG VISA 55,84\nBetrag EUR: 55,84\nexcl. MWST. Incl.\nan 49,90% 3,16 0,16 3,32 K\n1 10,00% 33,77 3,38 37,15 A\nI 20,00% 12,81 2,56 15,37 B'},
+  {kind:'focused',text:'INTERSPAR\n02.11.2026\nZAHLUNG VISA\nBetrag EUR: 55,84'},
+  {kind:'items',text:'SUMME: 55,84\nZAHLUNG VISA 55,84\nBetrag EUR: 55,84\nexcl. MWST Incl.\n10,00% 33,77 3,38 37,15 A\n20,00% 12,81 2,56 15,37 B'},
+  {kind:'bottom',text:'SUMME\n55,84\nZAHLUNG VISA\n55,84\nBetrag EUR:\n35,84\nexcl. MWST. Incl.\n4,90%\n3,16\n0,16\n3,32 K\n10,00%\n33,77\n3,38\n37,15 A\n20,00%\n12,81\n2,56\n15,37 B'}
+ ]);
+ assert.equal(r.amount,55.84);
+ assert.equal(r.amountConflict,false);
+ assert.equal(r.merchant,'INTERSPAR');
+ assert.equal(r.payment_method,'card');
+ assert.ok(r.amountCandidates[0].mathEvidence.some(x=>x.kind==='vat-aggregate'));
+ assert.ok(!r.amountCandidates.some(x=>[3.32,37.15,15.37].includes(x.amount)&&x.totalPassNames.length>0));
+});
