@@ -308,7 +308,7 @@ function App(){
         duplicates.length?'Možné duplicity: '+examples:'Žádná podezřelá duplicita.',
         'Pokud potřebuješ úplné vyúčtování, zvol Zrušit a oprav položky v Náhledu.',
         'Přesto stáhnout NEÚPLNÝ / neověřený Excel?'
-      ].join('\\n\\n');
+      ].join('\n\n');
       if(!window.confirm(message)){setView('preview');return;}
     }
     await run(async()=>{
