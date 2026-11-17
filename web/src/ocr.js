@@ -106,6 +106,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
   if(!worker)throw lastError||new Error('Nepodařilo se načíst OCR jazyky.');
   let closed=false;
   async function recognizePass(image,kind,band){
+    const started=Date.now();
     const modes={
       normal:PSM.AUTO,totals:PSM.SINGLE_BLOCK,items:PSM.SINGLE_BLOCK,tax:PSM.SINGLE_BLOCK,focused:PSM.SINGLE_COLUMN,enhanced:PSM.SINGLE_BLOCK,
       header:PSM.SPARSE_TEXT,middle:PSM.AUTO,payment:PSM.AUTO,bottom:PSM.SPARSE_TEXT,soft:PSM.AUTO
@@ -116,14 +117,14 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
     });
     const input=await createPassImage(image,kind,band);
     const result=await worker.recognize(input,kind==='normal'?{rotateAuto:true}:{});
-    return {kind,text:String(result.data?.text||''),ocrConfidence:result.data?.confidence??null};
+    return {kind,text:String(result.data?.text||''),ocrConfidence:result.data?.confidence??null,durationMs:Date.now()-started};
   }
   return {
     language,
     async scan(file,{mode:requestedMode=mode}={}){
       if(closed)throw new Error('OCR bylo ukončeno.');
       if(!canRecognize(file))throw new Error('OCR je dostupné pouze pro fotografie, ne PDF.');
-      const opened=await loadPhoto(file),passes=[],attempted=[];
+      const opened=await loadPhoto(file),passes=[],attempted=[],failedPasses=[];
       const started=Date.now(),limit=maxOcrPasses(requestedMode);
       let lastError=null;
       try{
@@ -148,6 +149,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
             passes.push(await recognizePass(opened.image,kind,band));
           }catch(error){
             lastError=error;
+            failedPasses.push({kind,message:String(error?.message||error).slice(0,250)});
             onProgress('Jeden průchod nevyšel; pokračuji jiným postupem…');
           }
         }
@@ -163,7 +165,10 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
           'medium':combined.confidence;
         return {...combined,confidence,ocrVerified:verified,ocrLanguage:language,ocrMode:requestedMode,
           receiptCropDetected:!!band,ocrDurationMs:Date.now()-started,
-          attemptedPasses:attempted};
+          attemptedPasses:attempted,
+          failedPasses,
+          passDiagnostics:passes.map(p=>({kind:p.kind,ocrConfidence:p.ocrConfidence,
+            durationMs:p.durationMs,text:p.text.slice(0,12000)}))};
       }finally{opened.release()}
     },
     async close(){if(closed)return;closed=true;await worker.terminate()}
