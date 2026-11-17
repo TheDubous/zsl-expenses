@@ -31,6 +31,8 @@ export function combineReceiptPasses(passes){
       let item=amountMap.get(key);
       if(!item){item={...option,score:0,passNames:[]};amountMap.set(key,item)}
       item.score=Math.max(item.score,option.score);
+      item.isTotal=!!(item.isTotal||option.isTotal);
+      item.isPaid=!!(item.isPaid||option.isPaid);
       item.passNames.push(entry.kind);
     }
   }
