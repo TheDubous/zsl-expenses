@@ -38,3 +38,23 @@ test('no readings is safe and does not invent supplier',()=>{
  assert.equal(result.merchant,null);
  assert.equal(result.amount,null);
 });
+
+test('header-only pass repairs date without allowing header prices to override totals',()=>{
+ const r=combineReceiptPasses([
+  {kind:'focused',text:['Steinblock GmbH','43.11.2026 15:12','Gesamt EUR 111,60'].join('\n')},
+  {kind:'middle',text:['Gesamt: EUR 111,60','St Satz Netto USt Brutto','Gesamt: 93,00 18,60 111,60'].join('\n')},
+  {kind:'header',text:['Steinblock GmbH','13.11.2026 15:12','Item 987,00 EUR'].join('\n')}
+ ]);
+ assert.equal(r.amount,111.6);
+ assert.equal(r.spent_on,'2026-11-13');
+ assert.equal(r.merchant,'Steinblock GmbH');
+ assert.ok(!r.amountCandidates.some(x=>x.amount===987));
+});
+test('tax break-down is not a conflicting printed total when OCR only sees the gross in one pass',()=>{
+ const r=combineReceiptPasses([
+  {kind:'focused',text:['Steinblock GmbH','09.11.2026','Gesamt EUR 96,80'].join('\n')},
+  {kind:'middle',text:['St Satz Netto USt Brutto','Gesamt: 80,67 16,13 96,80'].join('\n')}
+ ]);
+ assert.equal(r.amount,96.8);
+ assert.notEqual(r.confidence,'low');
+});

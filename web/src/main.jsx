@@ -363,7 +363,7 @@ function App(){
             <option value="precise">Důkladné – méně průchodů</option>
             <option value="fast">Rychlé – základní čtení</option>
           </select>
-          <small>OCR běží v telefonu. Čtení má omezený počet průchodů a po přibližně 75 sekundách už nezačíná další kontrolu (probíhající průchod může doběhnout déle). První načtení jazyků vyžaduje internet; další použití je obvykle rychlejší. Textová PDF se čtou přímo, skenovaná pomocí OCR.</small>
+          <small>OCR běží v telefonu. Čtení má omezený počet průchodů a po přibližně 90 sekundách už nezačíná další kontrolu (probíhající průchod může doběhnout déle). První načtení jazyků vyžaduje internet; další použití je obvykle rychlejší. Textová PDF se čtou přímo, skenovaná pomocí OCR.</small>
         </div>
         <div className="upload-row">
           <label className="btn filebtn"><Upload size={17}/> Více účtenek<input type="file" accept="image/*,application/pdf" multiple disabled={busy} onChange={e=>{uploadReceipts(e.target.files);e.target.value=''}}/></label>

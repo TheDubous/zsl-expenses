@@ -30,26 +30,36 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
  }
  const primary=band?'focused':'normal';
  const secondary=band?'normal':'enhanced';
+ if(mode==='max'){
+  // On phones a second full-page OCR may exhaust the 90s budget before
+  // reaching the totals. Read the shorter central payment area first.
+  if(!done.has(primary))return primary;
+  if(isOcrCertain(result))return null;
+  if(!done.has('middle'))return 'middle';
+  const weakAmount=!Number(result?.amount)||result?.confidence!=='high';
+  const weakHeader=!result?.merchant||result?.merchantConfidence!=='high'||!result?.spent_on;
+  if(weakAmount&&!done.has('bottom'))return 'bottom';
+  if(weakHeader&&!done.has('header'))return 'header';
+  if(!done.has('bottom'))return 'bottom';
+  if(!done.has(secondary))return secondary;
+  if(!done.has('enhanced'))return 'enhanced';
+  if(!done.has('header'))return 'header';
+  if(!done.has('soft'))return 'soft';
+  return null;
+ }
+ // Keep the original faster/precise schedules unchanged.
  if(!done.has(primary))return primary;
  if(!done.has(secondary))return secondary;
  if(isOcrCertain(result))return null;
- // Two agreeing OCR passes can share the same digit error; verify the
- // printed total with a separate footer crop in the maximum-quality mode.
- if(mode==='max'&&done.size===2&&result?.confidence==='high'&&
-    result?.amountCandidates?.some(v=>v.amount===result.amount&&v.isTotal)&&
-    !done.has('bottom'))return 'bottom';
- // Use targeted regions before extra full-page reads. A bottom scan is much
- // cheaper for "Summe" or "Celkem"; a header scan helps fuzzy vendor names.
  const weakAmount=!Number(result?.amount)||result?.confidence!=='high';
  const weakMerchant=!result?.merchant||result?.merchantConfidence!=='high';
  if(weakAmount&&!done.has('middle'))return 'middle';
  if(weakAmount&&!done.has('bottom')&&done.has('middle'))return 'bottom';
  if(weakMerchant&&!done.has('header'))return 'header';
- // Date missing or disagreement: try a differently contrasted full receipt.
  if(!done.has('enhanced'))return 'enhanced';
- if(mode==='max'&&!done.has('bottom'))return 'bottom';
- if(mode==='max'&&!done.has('header'))return 'header';
- if(mode==='max'&&!done.has('soft'))return 'soft';
+ if(!done.has('bottom'))return 'bottom';
+ if(!done.has('header'))return 'header';
+ if(!done.has('soft'))return 'soft';
  return null;
 }
 export function maxOcrPasses(mode='max'){return ocrConfig(mode).maxPasses}
