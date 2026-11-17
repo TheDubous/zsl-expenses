@@ -156,7 +156,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
         // In maximum-quality mode, two passes can repeat the SAME OCR digit
         // error. Complete both arithmetic crops before claiming green status.
         const verified=isOcrCertain(combined)&&
-          (requestedMode!=='max'||(attempted.includes('items')&&attempted.includes('tax')));
+          (requestedMode!=='max'||(passes.some(p=>p.kind==='items')&&passes.some(p=>p.kind==='tax')));
         // Two reads may repeat the same digit error. When the phone reaches
         // its time budget early, show the candidate but require review.
         const confidence=requestedMode==='max'&&combined.confidence==='high'&&!verified?
