@@ -33,7 +33,7 @@ function locatePaper(image){
   canvas.width=canvas.height=1;
   return findReceiptBand(pixels);
 }
-async function createPassImage(image,kind,band){
+async function createPassImage(image,kind,band,{liteOverview=false}={}){
   const originalW=image.naturalWidth,originalH=image.naturalHeight;
   const focused=['focused','enhanced','header','middle','bottom','soft'].includes(kind)&&!!band;
   // The dedicated total crop intentionally uses the full image width:
@@ -44,9 +44,12 @@ async function createPassImage(image,kind,band){
   const region=kind==='items'?[.25,.50]:kind==='tax'?[.67,.31]:kind==='totals'?[.44,.41]:kind==='header'?[0,.48]:kind==='middle'?[.22,.5]:kind==='payment'?[.30,.55]:kind==='bottom'?[.35,.65]:[0,1];
   const cropY=Math.floor(originalH*region[0]);
   const cropH=Math.max(1,Math.min(originalH-cropY,Math.floor(originalH*region[1])));
-  const maxW=focused?1750:1950;
-  const maxH=kind==='totals'?2100:kind==='header'?1900:kind==='middle'?2300:kind==='payment'?2250:kind==='bottom'?2400:3500;
-  const maxPixels=3_600_000;
+  // Keep full-resolution normal OCR in fast/precise. In maximum quality,
+  // other high-resolution crops already cover text and amounts; downsize the
+  // fallback overview to avoid pathological multi-language AUTO runs on iOS.
+  const maxW=liteOverview?1350:focused?1750:1950;
+  const maxH=liteOverview?1900:kind==='totals'?2100:kind==='header'?1900:kind==='middle'?2300:kind==='payment'?2250:kind==='bottom'?2400:3500;
+  const maxPixels=liteOverview?1_600_000:3_600_000;
   const ratio=Math.min(focused?2.8:1.7,maxW/base.width,maxH/cropH,
     Math.sqrt(maxPixels/(base.width*cropH)));
   const width=Math.max(1,Math.round(base.width*ratio));
@@ -105,7 +108,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
   }
   if(!worker)throw lastError||new Error('Nepodařilo se načíst OCR jazyky.');
   let closed=false;
-  async function recognizePass(image,kind,band){
+  async function recognizePass(image,kind,band,requestedMode=mode){
     const started=Date.now();
     const modes={
       normal:PSM.AUTO,totals:PSM.SINGLE_BLOCK,items:PSM.SINGLE_BLOCK,tax:PSM.SINGLE_BLOCK,focused:PSM.SINGLE_COLUMN,enhanced:PSM.SINGLE_BLOCK,
@@ -115,8 +118,8 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
       tessedit_pageseg_mode:modes[kind],
       preserve_interword_spaces:'1'
     });
-    const input=await createPassImage(image,kind,band);
-    const result=await worker.recognize(input,kind==='normal'?{rotateAuto:true}:{});
+    const input=await createPassImage(image,kind,band,{liteOverview:kind==='normal'&&requestedMode==='max'});
+    const result=await worker.recognize(input,kind==='normal'&&requestedMode!=='max'?{rotateAuto:true}:{});
     return {kind,text:String(result.data?.text||''),ocrConfidence:result.data?.confidence??null,durationMs:Date.now()-started};
   }
   return {
@@ -146,7 +149,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
           };
           onProgress('OCR · '+attempted.length+'/'+limit+' · '+labels[kind]);
           try{
-            passes.push(await recognizePass(opened.image,kind,band));
+            passes.push(await recognizePass(opened.image,kind,band,requestedMode));
           }catch(error){
             lastError=error;
             failedPasses.push({kind,message:String(error?.message||error).slice(0,250)});
