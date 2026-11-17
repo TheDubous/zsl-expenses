@@ -71,7 +71,31 @@ export function combineReceiptPasses(passes){
   // Competing, independently reconciled gross values remain unresolved.
   // Distinct calculations must agree. A second contradictory proof is a
   // real ambiguity; never auto-select the top-scored number in that case.
-  const reconciled=allAmounts.filter(x=>x.grossPassNames.length>0||x.mathEvidence.length>0);
+  // A sum of *visible* line items is not proof that ALL receipt items were
+  // recognized. OCR of a folded Steinblock receipt read two rows correctly
+  // but omitted the third: 76.80 + 21.00 = 97.80, NOT the paid 111.60.
+  // Another scan similarly yielded 69.20 rather than 96.80.
+  // VAT reconciliation is a stronger check than a potentially partial table.
+  const vatEvidence=x=>x.grossPassNames.length>0||
+    x.mathEvidence.some(p=>p.kind==='vat-columns'||p.kind==='vat-rate');
+  const strongMath=allAmounts.filter(vatEvidence);
+  const itemMath=allAmounts.filter(x=>!vatEvidence(x)&&
+    x.mathEvidence.some(p=>p.kind==='line-items'));
+  const corroboratedGross=strongMath.length===1&&
+    strongMath[0].totalPassNames.length>=2&&
+    strongMath[0].passNames.length>=3&&
+    itemMath.every(x=>strongMath[0].score>=x.score+20);
+  // Without a corroborated gross, disagreeing independent calculations
+  // still require human review. Partial item sums must NOT override a
+  // better-supported printed total/card payment.
+  const strongPrinted=allAmounts.some(x=>
+    (x.totalPassNames.length>=2||
+      (x.totalPassNames.length>0&&x.paidPassNames.length>0))&&
+    itemMath.some(v=>v.amount!==x.amount&&x.score>=v.score+20));
+  const reconciled=corroboratedGross?strongMath:
+    strongMath.length?[...strongMath,...itemMath]:
+    strongPrinted?itemMath.filter(x=>x.totalPassNames.length>0||x.paidPassNames.length>0):
+    itemMath;
   const arithmeticWinner=reconciled.length===1?reconciled[0]:null;
   const competingMath=reconciled.length>1;
   const amounts=allAmounts.sort((a,b)=>
