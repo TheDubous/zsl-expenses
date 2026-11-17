@@ -1,5 +1,20 @@
 # ZSL Expenses · Lokální PWA (bez databázového serveru)
 
+## v0.9.3 – OCR Maximální přesnost (výchozí)
+
+- Po instalaci aktualizace je v záložce **Doklady → Způsob rozpoznávání** automaticky zvolen režim **Maximální přesnost**.
+- Při zahájení rozpoznávání fotografií se v tomto režimu pokusí načíst jazyky **angličtina + němčina + čeština + slovenština**. Pokud některý jazyk nelze získat, zkouší menší jazykovou sadu. První načtení jazykových modelů může vyžadovat připojení k internetu; Tesseract opakovaně využívá svou cache.
+- Fotografie se vyhodnocuje z různých kombinací izolovaného papíru, celého snímku, zvýšeného kontrastu, horní části (dodavatel) a spodní části (celková zaplacená částka). U slabého tisku zkusí jemnější kontrast. Už se vždy **nespouští všechny průchody**.
+- OCR porovná, zda dvě odlišné úpravy fotografie uvádějí stejnou částku. Pokud se částka, datum a dodavatel shodují s vysokou jistotou, další zbytečné průchody se přeskočí.
+- Maximálně **5 průchodů** s **měkkým časovým rozpočtem 75 sekund pro zahajování nových kontrol** u jedné fotografie. Probíhající jeden průchod nelze vždy bezpečně přerušit (zvláště na starším iPhonu), takže nejde o záruku dokončení do 75 sekund ani do dvou minut.
+- Příprava bitmapy je omezená na ~3,6 megapixelu na průchod a menší výřezy pro horní/spodní část, aby se nezvyšovala paměť iPhonu kvůli opakovanému rozpoznávání velkých fotografií.
+- Původní volby **Důkladné** a **Rychlé** zůstávají pro situace se slabším telefonem nebo bez uložených rozšiřujících jazyků.
+- PDF s běžnou textovou vrstvou se dál čte přímo a mnohem rychleji; jen skenované PDF může spustit OCR na relevantních stranách, s kontrolou času. Není potřeba posílat účtenky do cloudu.
+
+**Zachována ochrana:** výsledky OCR jsou pouze návrh, ne důkaz správnosti. Když jsou dvě částky nejednoznačné nebo je částka v cizí měně, aplikace nenahrazuje ověření dokladu ani nepřevádí cizí měnu na eura bez podkladů. Původní XLSX ZSL, jeho vzorce a formátování zůstávají nedotčené.
+
+---
+
 ## v0.9.2 – automatické čtení PDF účtenek a vlakových jízdenek
 
 Aplikace už **neukládá všechny PDF automaticky s částkou 0**. Nově se PDF v telefonu zpracuje přes pdf.js: otevře všechny stránky, přečte jejich existující textové vrstvy, vyhledá daňový doklad a vyhodnotí skutečný konečný součet. Pokud je PDF pouze skenem, použije OCR vykreslených stránek. Na PDF už je možné kliknout **Přečíst znovu**, a to i po dřívějším uložení bez výsledku. Pokud extrakce selže, chyba se zobrazí u dokladu.
