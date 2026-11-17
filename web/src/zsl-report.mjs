@@ -1,4 +1,5 @@
 import {expenseStatus,summarize} from './utils.mjs';
+import {isMotorwayVignette} from './zsl-template-map.mjs';
 
 // Headings and labels transcribed from the source ZSL workbook (s.1, s.3, s.4, s.5, s.6).
 export const ZSL_SHEET_TITLES=[
@@ -37,6 +38,7 @@ const CENT=value=>Math.round((Number(value)||0)*100);
 export const num2=value=>Math.round((Number(value)||0)*100)/100;
 function sumCents(list){return list.reduce((acc,item)=>acc+CENT(item.amount),0)/100}
 export function expenseSection(expense,event){
+  if(isMotorwayVignette(expense))return 'other';
   if(expense.category==='fuel')return 'zsl_car';
   if(ZSL_EXPENSE_SECTIONS.some(x=>x.id===expense.zsl_section))return expense.zsl_section;
   if(expense.category==='food')return 'unassigned';
@@ -50,9 +52,12 @@ export function makeZslReport({event,trainer,riders=[],expenses=[],funding=[]}){
     const entries=[...expenses].filter(e=>expenseSection(e,event)===section.id).sort((a,b)=>(a.spent_on||'').localeCompare(b.spent_on||''));
     return {...section,expenses:entries,total:sumCents(entries)};
   });
-  const travel=sumCents(expenses.filter(x=>['travel','fuel'].includes(x.category)));
-  const lodging=sumCents(expenses.filter(x=>x.category==='lodging'));
-  const other=sumCents(expenses.filter(x=>!['travel','fuel','lodging'].includes(x.category)));
+  // Settlement totals must use the same section mapping as XLSX export.
+  // Otherwise a vignette would be shown under Transport in the preview
+  // while being exported to INÉ vedľajšie výdavky.
+  const travel=sumCents(expenses.filter(x=>['transport','zsl_car'].includes(expenseSection(x,event))));
+  const lodging=sumCents(expenses.filter(x=>expenseSection(x,event)==='lodging'));
+  const other=sumCents(expenses.filter(x=>!['transport','zsl_car','lodging'].includes(expenseSection(x,event))));
   const calculations={travel,lodging,other,total:financial.spent,balance:financial.remaining};
   const settlement=ZSL_SETTLEMENT_ROWS.map(row=>({...row,amount:row.status==='not_computed'?null:calculations[row.id]}));
   const missing=[];
