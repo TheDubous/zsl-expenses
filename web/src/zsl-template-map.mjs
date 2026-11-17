@@ -37,7 +37,7 @@ export function receiptItemLabel(expense={}){
  }
  // Always prefer the actual receipt line over a vague merchant name.
  if(match(/\b(?:vignett?e|vignette)\b/))
-  return match(/\ba10\b/)?'Diaľničná známka A10':'Diaľničná známka';
+  return match(/\ba10t?\b/)?'Diaľničná známka A10':'Diaľničná známka';
  if(match(/\b(?:pisten\s*geb(?:uhr|uehr)?|pistengeb(?:uhr|uehr)?)\b/))
   return 'Poplatok za trať';
  if(match(/\bsct\s*kind\b/))return 'SCT Kind';
