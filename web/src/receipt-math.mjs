@@ -25,7 +25,7 @@ export function receiptMathEvidence(text){
    // Also handle fuel receipts with only "MWST B 20% VON 106,48 21,30";
    // frequent OCR misreadings MUST, MIST and MVST are permitted only when
    // both the VAT base and tax agree with the printed rate.
-   if(/\b(?:m[wuvi]st|u\s*st|mehrwertsteuer|steuer|vat|dph)\b/i.test(line)&&
+   if(/\b(?:m[wuvi]st|stb|u\s*st|mehrwertsteuer|steuer|vat|dph)\b/i.test(line)&&
        /\b(?:von|of|z|aus)\b/i.test(line)&&values.length>=2){
      const m=line.match(/(\d{1,2})(?:[,.]00)?\s*%/);
      if(m){
