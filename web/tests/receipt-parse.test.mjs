@@ -147,3 +147,16 @@ test('OCR fractional O and broken spaced total label still read payment not tax'
  assert.equal(got.amount,127.78);
  assert.ok(got.amountCandidates[0].isTotal);
 });
+
+test('Steinblock payment-only EFT still supplies total and card method',()=>{
+ const r=parseReceiptText('Steinblock GmbH\n13.11.2026 15:12:25\nNetto 93,00\nUSt 18,60\nBezahlt:\nEFT EUR 111,60');
+ assert.equal(r.amount,111.6);
+ assert.equal(r.merchant,'Steinblock GmbH');
+ assert.equal(r.payment_method,'card');
+});
+test('gross is rightmost of Gesamt even if VAT column headings are missing',()=>{
+ const r=parseReceiptText('Steinblock GmbH\n09.11.2026\nGesamt: 80,67 16,13 96,80');
+ assert.equal(r.amount,96.8);
+ assert.equal(r.amountCandidates.some(x=>x.amount===80.67&&x.isTotal),false);
+ assert.equal(r.amountCandidates.some(x=>x.amount===16.13&&x.isTotal),false);
+});
