@@ -1,5 +1,7 @@
 # ZSL Expenses
 
+**v0.9.3:** Výchozí Maximální přesnost OCR pro fotky účtenek; čeština, slovenština, němčina a angličtina; adaptivní kontrolní průchody s měkkým časovým limitem. [Podrobnosti](./web/README.md).
+
 **v0.9.2:** PDF jízdenky, faktury a účtenky se čtou automaticky ze všech stran; výsledná daňová částka má přednost před dílčími cenami. Doklady v CZK bezpečně čekají na skutečný přepočet do EUR a lze je znovu načíst bez nahrávání. [Návod a bezpečnost měn](./web/README.md).
 
 **v0.9.1:** datum a krátká rozpoznaná položka (Diesel, AdBlue, Skipas, Startovné, Prenájom trate) v původním ZSL Excelu; všechno palivo se automaticky řadí do Motorové vozidlo ZSL bez výběru vozidla. [Více informací](./web/README.md).
