@@ -34,6 +34,7 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
  const primary=band?'focused':'normal';
  const secondary=band?'normal':'enhanced';
  if(mode==='max'){
+  if(isOcrCertain(result))return null;
   // Full-page, multi-language OCR is expensive on iPhones. Previously the
   // first focused pass followed by two upper-middle crops could consume the
   // entire soft budget before the actual total near the bottom (IMG_8111).
