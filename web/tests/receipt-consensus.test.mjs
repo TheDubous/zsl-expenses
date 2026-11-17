@@ -86,3 +86,21 @@ test('IMG_8114 conflicting 127.18 printed vs 127.78 paid is not silently booked'
  assert.equal(r.confidence,'low');
  assert.equal(r.amountConflict,true);
 });
+
+test('independent Brutto tax table and EFT can verify IMG_8111',()=>{
+ const result=combineReceiptPasses([
+  {kind:'focused',text:'Steinblock GmbH\n09.11.2026\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80'},
+  {kind:'payment',text:'Bezahlt:\nEFT EUR 96,80'}
+ ]);
+ assert.equal(result.amount,96.8);
+ assert.equal(result.confidence,'high');
+ assert.equal(result.totalVerified,true);
+});
+test('tax table alone leaves IMG_8111 visible as unverified candidate',()=>{
+ const result=combineReceiptPasses([
+  {kind:'middle',text:'Steinblock GmbH\n09.11.2026\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80'}
+ ]);
+ assert.equal(result.amount,96.8);
+ assert.equal(result.totalVerified,false);
+ assert.equal(result.confidence,'medium');
+});

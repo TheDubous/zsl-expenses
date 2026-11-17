@@ -89,23 +89,32 @@ function moneyCandidates(lines){
     // A tax breakdown often prints 'Gesamt: NETTO  USt  BRUTTO' with three
     // numbers on the next line. Only the rightmost BRUTTO is the paid total.
     const taxHeader=lines.slice(Math.max(0,index-3),index).join(' ');
-    const taxSummary=matches.length>=3&&explicitTotal&&
-      /netto[\s\S]{0,50}(?:u\s*st|mwst|vat|steuer)[\s\S]{0,50}brutto/i.test(taxHeader);
+    const hasTaxColumns=/netto[\s\S]{0,50}(?:u\s*st|mwst|vat|steuer)[\s\S]{0,50}brutto/i.test(taxHeader);
+    const taxSummary=matches.length>=3&&explicitTotal&&hasTaxColumns;
+    // Some scans lose the "Gesamt" caption but still read the printed
+    // Netto / USt / Brutto row. Its last 3 numbers must reconcile to cents;
+    // this is stronger evidence than a random rightmost item price.
+    const taxValues=matches.slice(-3).map(m=>parseNumber(m[0]));
+    const reconcilesTax=taxValues.length===3&&taxValues.every(Number.isFinite)&&
+      Math.abs(Math.round(taxValues[0]*100)+Math.round(taxValues[1]*100)-Math.round(taxValues[2]*100))<=1;
+    const taxRowGross=matches.length>=3&&hasTaxColumns&&reconcilesTax;
     const summaryColumns=matches.length>=2&&explicitTotal&&/\b(?:gesamt|total|spolu|suma|celkom)\b/i.test(line);
-    const selected=(taxSummary||summaryColumns)?[matches[matches.length-1]]:matches;
+    const selected=(taxSummary||summaryColumns||taxRowGross)?[matches[matches.length-1]]:matches;
     for(const m of selected){
       const amount=parseNumber(m[0]);
       if(!Number.isFinite(amount)||amount<=0||amount>100000)continue;
-      const isBad=penalized.test(line)||(penalized.test(prev)&&!explicitTotal&&!paidLine);
+      // The Netto/USt/Brutto header is not a discount or a tax-only row;
+      // a reconciled Brutto value on the following line is legitimate.
+      const isBad=penalized.test(line)||(penalized.test(prev)&&!explicitTotal&&!paidLine&&!taxRowGross);
       if(isBad)continue;
-      const isTotal=explicitTotal||inheritedTotal||paidLine;
+      const isTotal=explicitTotal||inheritedTotal||paidLine||taxRowGross;
       const hasCurrency=/(?:\bEUR\b|\bEURO\b|\bCZK\b|\bKČ\b|\bCHF\b|€)/i.test(line);
-      const score=(explicitTotal?16:paidLine?12:inheritedTotal?11:0)+
+      const score=(explicitTotal?16:paidLine?12:taxRowGross?11:inheritedTotal?11:0)+
         (hasCurrency?3:0)+(matches.length===1?2:0)+(index>lines.length/3?1:0)+(taxSummary?3:0)-
         // A guessed OCR digit is weaker than an independently printed payment.
         (guessedFraction?8:0);
       values.push({amount,score,line,lineNumber:index,isTotal,isPaid:explicitTotal||paidLine,
-        explicitTotal,paidLine,taxSummary});
+        explicitTotal:explicitTotal||taxRowGross,paidLine,taxSummary,taxRowGross});
     }
   });
   const counts=new Map();

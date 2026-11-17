@@ -13,6 +13,17 @@ const timeValue=s=>/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(s||''))?(Number(s.s
 const t=(sheet,cell,value)=>value==null||String(value).trim()===''?null:{sheet,cell,value:String(value),kind:'text'};
 const n=(sheet,cell,value)=>value==null||!Number.isFinite(Number(value))?null:{sheet,cell,value:Number(value),kind:'number'};
 const S1='s.1 - pokyn',S3='s.3 - výdavky',S4='s.4 - stravné zahr.',S6='s.6 - správa';
+
+/** Vignettes are always booked under ZSL "INÉ vedľajšie výdavky", not transport.
+ * Use the original receipt text OR its saved item label so legacy entries
+ * continue to work without re-OCR or a destructive database migration.
+ */
+export function isMotorwayVignette(expense={}){
+ const text=[expense.itemLabel,expense.ocr?.rawText,expense.note,expense.receipt_name]
+  .filter(Boolean).join(' ').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ return /\b(?:vignet(?:te|t|e)\b|autobahnvignette\b|(?:dalnicn|dialnicn)\w*\s+znamk\w*\b)/i.test(text);
+}
+
 // What was purchased, not where. Keep this short for ZSL's original
 // narrow description cells. Explicit user correction always wins.
 export function receiptItemLabel(expense={}){
@@ -69,6 +80,7 @@ export function zslReceiptDescription(expense){
 export function recommendedZslSection(expense,event){
   // ZSL owns the vehicle for all fuel, diesel, petrol and AdBlue receipts.
   // This also migrates old receipts that stored a private/car-choice section.
+  if(isMotorwayVignette(expense))return 'other';
   if(expense.category==='fuel')return 'zsl_car';
   if(expense.zsl_section)return expense.zsl_section;
   if(expense.category==='food')return 'unassigned';
