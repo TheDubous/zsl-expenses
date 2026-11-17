@@ -204,6 +204,7 @@ export function parseReceiptText(text){
       existing.explicitTotal=!!(existing.explicitTotal||candidate.explicitTotal);
       existing.paidLine=!!(existing.paidLine||candidate.paidLine);
       existing.taxSummary=!!(existing.taxSummary||candidate.taxSummary);
+      existing.taxRowGross=!!(existing.taxRowGross||candidate.taxRowGross);
     }
   }
   const uniqueAmounts=[...grouped.values()].sort((a,b)=>b.score-a.score||b.amount-a.amount);
