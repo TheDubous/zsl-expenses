@@ -33,6 +33,7 @@ export function combineReceiptPasses(passes){
       item.score=Math.max(item.score,option.score);
       item.isTotal=!!(item.isTotal||option.isTotal);
       item.isPaid=!!(item.isPaid||option.isPaid);
+      item.explicitTotal=!!(item.explicitTotal||option.explicitTotal);
       item.passNames.push(entry.kind);
     }
   }
@@ -42,7 +43,7 @@ export function combineReceiptPasses(passes){
   const second=amounts[1]||null;
   const merchant=merchants[0]||null;
   const merchantConflict=merchants[1]&&merchants[1].score>=merchant.score-4&&compactText(merchants[1].name)!==compactText(merchant.name);
-  const amountConflict=!!(second&&second.amount!==best.amount&&(
+  const amountConflict=!!(second&&second.amount!==best.amount&&best.isTotal&&second.isTotal&&(
     second.score>=best.score-3 ||
     // A separately read footer showing a different printed total is a
     // substantive disagreement, even if two full-image scans agree.
@@ -62,7 +63,7 @@ export function combineReceiptPasses(passes){
     amountCandidates:amounts,
     confidence:amountConfidence,
     merchant:topMerchant,merchantCandidates:merchants,merchantConfidence,
-    spent_on:fromWhole('spent_on',null),
+    spent_on:fromWhole('spent_on',null)||reads.filter(x=>x.kind==='header').map(x=>x.parsed.spent_on).find(Boolean)||null,
     category:fromWhole('category','other'),
     payment_method:fromWhole('payment_method','unknown'),
     rawText,
