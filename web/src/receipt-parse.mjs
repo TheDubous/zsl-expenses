@@ -67,8 +67,12 @@ function moneyCandidates(lines){
   lines.forEach((original,index)=>{
     // OCR can mistake the last decimal zero for O or insert a space after the
     // decimal separator. Correct ONLY a two-character fractional part.
+    let guessedFraction=false;
     const line=original.replace(/(\d[,.])\s*([0-9OoIl]{2})(?![\dA-Za-z])/g,
-      (_,prefix,fraction)=>prefix+fraction.replace(/[Oo]/g,'0').replace(/[Il]/g,'1'));
+      (_,prefix,fraction)=>{
+        if(/[OoIl]/.test(fraction))guessedFraction=true;
+        return prefix+fraction.replace(/[Oo]/g,'0').replace(/[Il]/g,'1');
+      });
     const matches=[...line.matchAll(amountPattern)];
     if(/\b\d{1,2}\.\d{1,2}\.20\d{2}\b/.test(line)&&!totalLabel(line))return;
     const prev=lines[index-1]||'';
@@ -89,7 +93,9 @@ function moneyCandidates(lines){
       const isTotal=explicitTotal||inheritedTotal||paidLine;
       const hasCurrency=/(?:\bEUR\b|\bEURO\b|\bCZK\b|\bKČ\b|\bCHF\b|€)/i.test(line);
       const score=(explicitTotal?16:paidLine?12:inheritedTotal?11:0)+
-        (hasCurrency?3:0)+(matches.length===1?2:0)+(index>lines.length/3?1:0)+(taxSummary?3:0);
+        (hasCurrency?3:0)+(matches.length===1?2:0)+(index>lines.length/3?1:0)+(taxSummary?3:0)-
+        // A guessed OCR digit is weaker than an independently printed payment.
+        (guessedFraction?8:0);
       values.push({amount,score,line,lineNumber:index,isTotal,isPaid:explicitTotal||paidLine,
         explicitTotal,paidLine,taxSummary});
     }
