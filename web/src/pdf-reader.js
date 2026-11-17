@@ -64,24 +64,29 @@ export async function recognizePdf(file,{onProgress=()=>{},mode='precise',pdfEng
   // Digital PDFs need no image OCR. Only rasterize when there is truly no
   // usable text / amount. A PDF may contain both searchable and scanned pages.
   if(!result.sourceAmount||!result.sourceCurrency){
-   const targets=needsRendering.length?needsRendering:
-     (pdf.numPages===1?[1]:[pdf.numPages,1]);
+   const targets=(needsRendering.length?needsRendering:
+     (pdf.numPages===1?[1]:[pdf.numPages,1])).slice()
+     .sort((a,b)=>a===pdf.numPages?-1:b===pdf.numPages?1:a-b);
    onProgress(needsRendering.length?'PDF obsahuje obrázkové stránky, spouštím doplňkové OCR…':
      'PDF nemá jistě určenou částku nebo měnu. Zkouším kontrolní OCR důležitých stran…');
    const factory=ocrSessionFactory||(async callback=>{
-    const {createOCRSession}=await import('./ocr.js');return createOCRSession(callback);
+    const {createOCRSession}=await import('./ocr.js');
+    return createOCRSession(callback,{mode:mode==='max'?'max':'fast'});
    });
    worker=await factory(onProgress);
-   const scanned=[];
+   const scanned=[],started=Date.now();
    for(const [i,number] of targets.slice(0,6).entries()){
+    if(i>0&&Date.now()-started>=80000)break;
     onProgress('Rozpoznávám sken PDF – strana '+number+' ('+(i+1)+'/'+Math.min(6,targets.length)+')');
     try{
      const page=await pdf.getPage(number);
      const img=await renderAsBlob(page);
-     const read=await worker.scan(img,{mode:mode==='fast'?'fast':'fast'});
+     const read=await worker.scan(img,{mode:mode==='max'&&i===0?'max':'fast'});
      pages[number-1]=read.rawText||pages[number-1];
      scanned.push(number);
      page.cleanup();
+     const attempt=parsePdfReceiptPages(pages);
+     if(attempt.sourceAmount&&attempt.sourceCurrency&&attempt.merchant&&attempt.spent_on)break;
     }catch{/* Keep other pages; never overwrite a good text extraction. */}
    }
    const recovered=parsePdfReceiptPages(pages);
