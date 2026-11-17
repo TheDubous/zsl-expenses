@@ -39,6 +39,9 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
   if(!done.has(primary))return primary;
   if(isOcrCertain(result))return null;
   if(!done.has('middle'))return 'middle';
+  // A second, uncropped payment-region scan protects right-aligned amounts
+  // from overly aggressive paper isolation and faint-ink normalization.
+  if(!done.has('payment'))return 'payment';
   const weakAmount=!Number(result?.amount)||result?.confidence!=='high';
   const weakHeader=!result?.merchant||result?.merchantConfidence!=='high'||!result?.spent_on;
   if(weakAmount&&!done.has('bottom'))return 'bottom';
