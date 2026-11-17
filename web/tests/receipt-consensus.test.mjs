@@ -287,3 +287,39 @@ test('incomplete line-items alone cannot overturn independently printed paid tot
  assert.equal(r.amount,111.6);
  assert.equal(r.amountConflict,false);
 });
+
+test('IMG8130 real OCR: repeatedly printed 615 may be suggested despite one 616 card digit',()=>{
+ const r=combineReceiptPasses([
+  {kind:'focused',text:'Pitztaler Gletscherbahn\n03.11.2026\nSCT Kind 613,00\nSCT PF+ 2,00\nKreditkarte MasterCard 615.00\nGesamt 615,00\nTotal-EFT EUR: 615,00'},
+  {kind:'bottom',text:'Kreditkarte MasterCard\n616,00\nGesamt\nEUR\n615 00\nTotal-EFT RUR:\n615,00'}
+ ]);
+ assert.equal(r.amount,615);
+ assert.equal(r.amountConflict,true,'still records the conflicting paid digit');
+ assert.equal(r.totalVerified,false,'never auto-approve a conflicting payment');
+ assert.equal(r.evidenceSuggestion,true,'prefill a strong 615 for explicit human review');
+ assert.ok(r.amountCandidates.some(x=>x.amount===616&&x.paidPassNames.includes('bottom')));
+});
+test('IMG8129 Slovnaft photo: 132.34 from receipt, paid card and Slovak VAT',()=>{
+ const r=combineReceiptPasses([
+  {kind:'middle',text:'SLOVNAFT, a.s.\n02.11.2026 10:06:32\nEVO Diesel 65.810 L 2.011 EUR/L 132.34\nSUMA: 132.34 EUR\nSadzby Základ DPH Spolu\n23% 107.59 24.75 132.34 EUR'},
+  {kind:'focused',text:'SLOVNAFT\nSadzby Základ DPH Spolu\n23% 107.59 24.75 132.34 EUR\nSpolu 107.59 24.75 132.34 EUR\nPLATBY\nBanková karta 132.34 EUR\nUHRADENE 132.34 EUR'},
+  {kind:'payment',text:'Platba: BANKOVA KARTA\nUhradené: 132.34 EUR'}
+ ]);
+ assert.equal(r.amount,132.34);
+ assert.equal(r.merchant,'Slovnaft');
+ assert.equal(r.spent_on,'2026-11-02');
+ assert.equal(r.category,'fuel');
+ assert.equal(r.payment_method,'card');
+ assert.equal(r.amountConflict,false);
+ assert.ok(r.amountCandidates[0].mathEvidence.some(p=>p.kind==='vat-columns'));
+ assert.ok(!r.amountCandidates.some(c=>[107.59,24.75].includes(c.amount)&&c.totalPassNames.length>0));
+});
+test('two comparably supported competing card payments still require manual resolution',()=>{
+ const r=combineReceiptPasses([
+  {kind:'normal',text:'Obchod\nGesamt EUR 615,00\nKreditkarte MasterCard EUR 615,00'},
+  {kind:'focused',text:'Obchod\nGesamt EUR 616,00\nKreditkarte MasterCard EUR 616,00'}
+ ]);
+ assert.equal(r.amount,null);
+ assert.equal(r.evidenceSuggestion,false);
+ assert.equal(r.amountConflict,true);
+});
