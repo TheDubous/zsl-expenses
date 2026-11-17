@@ -43,7 +43,6 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
   // Read the full-width gross/payment area FIRST. No paper-band crop or
   // aggressive row-normalization is applied to this pass.
   if(!done.has('totals'))return 'totals';
-  if(isOcrCertain(result))return null;
   // Whole image supplies date, merchant and a second independent total read.
   if(!done.has('normal'))return 'normal';
   if(isOcrCertain(result)&&done.has('items')&&done.has('tax'))return null;
