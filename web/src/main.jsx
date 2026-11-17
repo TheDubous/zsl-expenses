@@ -552,7 +552,7 @@ function App(){
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
           {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>{editing.ocr.receiptCropDetected&&<p className="muted smalltext">Úzká účtenka byla před čtením automaticky izolována a zvětšena.</p>}
             <p>Automatické čtení může zaměnit dílčí cenu za celkovou částku. Před účetním exportem zkontroluj číslo proti originálu; ruční oprava se při dalším čtení zachová.</p>
-            {editing.ocr.amountConflict&&<p className="zsl-fx-warning">OCR přečetlo rozdílné celkové částky. {editing.ocr.arithmeticSuggestion?'Částku jsme navrhli podle součtu Netto + DPH = Brutto.':'Správnou částku nebylo možné určit.'} Ověř částku proti originálu a potvrď ji tlačítkem „Uložit změny“. Do Excelu ji do té doby nezařadíme.</p>}
+            {(editing.ocr.amountConflict||editing.ocr.arithmeticSuggestion)&&<p className="zsl-fx-warning">{editing.ocr.amountConflict?'OCR přečetlo rozdílné celkové částky. ':''}{editing.ocr.arithmeticSuggestion?'Navrhli jsme částku pomocí kontroly součtu položek nebo základu a DPH.':'Správnou částku nebylo možné bezpečně určit.'} Ověř navrženou částku proti originálu a potvrď ji tlačítkem „Uložit změny“. Do Excelu ji do té doby nezařadíme.</p>}
             {!!editing.ocr.attemptedPasses?.length&&<p className="muted smalltext">OCR průchody: {editing.ocr.attemptedPasses.join(' → ')} · čas {Math.round(Number(editing.ocr.ocrDurationMs||0)/1000)} s. Tyto údaje pomohou určit, jestli se OCR dostalo ke skutečné částce.</p>}
             {(editing.ocr.merchantCandidates||[]).length>0&&<div className="ocr-candidates">
               <span>Možní dodavatelé:</span>
@@ -560,7 +560,7 @@ function App(){
             </div>}
             {(editing.ocr.amountCandidates||[]).length>0&&<div className="ocr-candidates">Rozpoznané částky: {editing.ocr.amountCandidates.map((c,i)=>c.currency&&c.currency!==(active?.currency||'EUR')?
               <span className="muted smalltext" key={i}>{currency(c.amount,c.currency||'EUR')} (cizí měna – nelze vložit jako EUR)</span>:
-              <button key={i} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,c.currency||active?.currency||'EUR')}</button>)}</div>}
+              <button key={i} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,c.currency||active?.currency||'EUR')}{c.mathEvidence?.length?' · výpočet':''}</button>)}</div>}
             <details><summary>Zobrazit rozpoznaný text ({(editing.ocr.scannedPasses||[]).length||1} průchody · {editing.ocr.ocrLanguage||'automaticky'})</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
           </div>}
           <p className="muted smalltext">Bankovní potvrzení můžeš přiložit později v seznamu dokladů. Změna způsobu platby z karty odstraní původní bankovní přílohu.</p>
