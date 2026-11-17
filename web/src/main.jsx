@@ -552,6 +552,7 @@ function App(){
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
           {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>{editing.ocr.receiptCropDetected&&<p className="muted smalltext">Úzká účtenka byla před čtením automaticky izolována a zvětšena.</p>}
             <p>Automatické čtení může zaměnit dílčí cenu za celkovou částku. Před účetním exportem zkontroluj číslo proti originálu; ruční oprava se při dalším čtení zachová.</p>
+            {editing.ocr.amountConflict&&<p className="zsl-fx-warning">OCR přečetlo rozdílné celkové částky. {editing.ocr.arithmeticSuggestion?'Částku jsme navrhli podle součtu Netto + DPH = Brutto.':'Správnou částku nebylo možné určit.'} Ověř částku proti originálu a potvrď ji tlačítkem „Uložit změny“. Do Excelu ji do té doby nezařadíme.</p>}
             {!!editing.ocr.attemptedPasses?.length&&<p className="muted smalltext">OCR průchody: {editing.ocr.attemptedPasses.join(' → ')} · čas {Math.round(Number(editing.ocr.ocrDurationMs||0)/1000)} s. Tyto údaje pomohou určit, jestli se OCR dostalo ke skutečné částce.</p>}
             {(editing.ocr.merchantCandidates||[]).length>0&&<div className="ocr-candidates">
               <span>Možní dodavatelé:</span>
