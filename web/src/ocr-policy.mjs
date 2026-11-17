@@ -34,8 +34,8 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
   // On phones a second full-page OCR may exhaust the 90s budget before
   // reaching the totals. Read the shorter central payment area first.
   if(!done.has(primary))return primary;
-  if(!done.has('middle'))return 'middle';
   if(isOcrCertain(result))return null;
+  if(!done.has('middle'))return 'middle';
   const weakAmount=!Number(result?.amount)||result?.confidence!=='high';
   const weakHeader=!result?.merchant||result?.merchantConfidence!=='high'||!result?.spent_on;
   if(weakAmount&&!done.has('bottom'))return 'bottom';
