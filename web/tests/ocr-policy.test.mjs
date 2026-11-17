@@ -9,15 +9,17 @@ const result=()=>combineReceiptPasses([
 ]);
 const weak={amount:0,confidence:'low',merchant:null,merchantConfidence:'low',spent_on:null};
 test('maximum quality prioritizes original full-width totals and stays within the 90s budget',()=>{
- assert.equal(maxOcrPasses('max'),6);
+ assert.equal(maxOcrPasses('max'),8);
  assert.equal(ocrConfig('max').budgetMs,90000);
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:[]}), 'totals');
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],result:weak}),'normal');
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal'],result:weak}),'header');
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header'],result:weak}),'payment');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment'],result:weak}),'bottom');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','bottom'],result:weak}),'focused');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','bottom','focused'],result:weak}),null);
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment'],result:weak}),'items');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','items'],result:weak}),'tax');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','items','tax'],result:weak}),'bottom');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','items','tax','bottom'],result:weak}),'focused');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','items','tax','bottom','focused'],result:weak}),null);
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],result:weak,elapsedMs:90000}),null);
 });
 test('two good reads receive an independent footer verification in maximum mode',()=>{
@@ -32,7 +34,7 @@ test('two good reads receive an independent footer verification in maximum mode'
   {kind:'normal',text:'GUTMANN GmbH\n03.11.2026\nDIESEL\nGESAMTBETRAG 127,78 EUR'},
   {kind:'bottom',text:'EUROCARD 127,78 EUR'}]);
  assert.equal(isOcrCertain(verified),true);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal','bottom'],result:verified}),null);
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal','bottom'],result:verified}),'totals');
 });
 test('single pass and incomplete data never claim maximum certainty',()=>{
  const once=combineReceiptPasses([{kind:'normal',text:'SLOVNAFT\nDiesel 75,00\nTOTAL 127,78 EUR\n01.11.2026'}]);
@@ -95,5 +97,8 @@ test('Steinblock IMG8111 sum region cannot be deferred past first slow full-imag
  assert.equal(both.totalVerified,true);
  assert.equal(both.spent_on,'2026-11-09');
  assert.equal(isOcrCertain(both),true);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal'],result:both}),null);
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal'],result:both}),'payment');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','payment'],result:both}),'items');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','payment','items'],result:both}),'tax');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','payment','items','tax'],result:both}),null);
 });
