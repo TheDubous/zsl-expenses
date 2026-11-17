@@ -1,6 +1,6 @@
 import {combineReceiptPasses} from './receipt-consensus.mjs';
 import {findReceiptBand,paperCropRect} from './receipt-crop.mjs';
-import {chooseOcrPass,maxOcrPasses} from './ocr-policy.mjs';
+import {chooseOcrPass,maxOcrPasses,isOcrCertain} from './ocr-policy.mjs';
 
 export function canRecognize(file){
   if(!file)return false;
@@ -59,8 +59,8 @@ async function createPassImage(image,kind,band){
     focused:'grayscale(100%) contrast(128%)',
     enhanced:'grayscale(100%) contrast(162%)',
     header:'grayscale(100%) contrast(140%)',
-    middle:'grayscale(100%) contrast(145%)',
-    bottom:'grayscale(100%) contrast(143%)',
+    middle:'grayscale(100%) contrast(125%) brightness(105%)',
+    bottom:'grayscale(100%) contrast(135%) brightness(104%)',
     soft:'grayscale(100%) contrast(118%) brightness(112%)'
   }[kind]||'none';
   ctx.drawImage(image,base.x,cropY,base.width,cropH,0,0,width,height);
@@ -139,7 +139,12 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
         }
         if(!passes.length)throw lastError||new Error('Text účtenky se nepodařilo rozpoznat.');
         const combined=combineReceiptPasses(passes);
-        return {...combined,ocrLanguage:language,ocrMode:requestedMode,
+        const verified=isOcrCertain(combined);
+        // Two reads may repeat the same digit error. When the phone reaches
+        // its time budget early, show the candidate but require review.
+        const confidence=requestedMode==='max'&&combined.confidence==='high'&&!verified?
+          'medium':combined.confidence;
+        return {...combined,confidence,ocrVerified:verified,ocrLanguage:language,ocrMode:requestedMode,
           receiptCropDetected:!!band,ocrDurationMs:Date.now()-started,
           attemptedPasses:attempted};
       }finally{opened.release()}
