@@ -250,3 +250,40 @@ test('two genuinely different paid totals remain unresolved rather than accepted
  assert.equal(r.amountConflict,true);
  assert.equal(r.evidenceSuggestion,false);
 });
+
+test('real 2026-11-17 IMG8111: incomplete 69.20 item sum must not veto VAT 96.80',()=>{
+ const result=combineReceiptPasses([
+  {kind:'totals',text:'Steinblock GmbH\nGesamt EUR 96,80\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80'},
+  {kind:'normal',text:'Steinblock GmbH\n09.11.2026\nGesamt EUR 96,80'},
+  {kind:'payment',text:'Gesamt EUR 98,80\nEFT EUR 96,80'},
+  {kind:'items',text:'Menge Artikel EP Preis St\n4 50207 4 12,80 51,20 1\n6 360210 3,00 18,00 1\nGesamt EUR 96,80\nSt Satz Netto USt Brutto\nGesamt: 80,67 16,13 96,80'},
+  {kind:'focused',text:'Gesamt EUR 96,80'},
+  {kind:'middle',text:'Gesamt EUR 96,80'}
+ ]);
+ assert.ok(result.amountCandidates.some(x=>x.amount===69.2&&x.mathEvidence.some(p=>p.kind==='line-items')));
+ assert.ok(result.amountCandidates.some(x=>x.amount===98.8));
+ assert.equal(result.amount,96.8);
+ assert.equal(result.amountConflict,false);
+});
+test('real 2026-11-17 IMG8112: missing 13.80 line yields 97.80 but actual gross is 111.60',()=>{
+ const result=combineReceiptPasses([
+  {kind:'totals',text:'Steinblock GmbH\nGesamt EUR 111,60\nSt Satz Netto USt Brutto\n1 20,00% 93,00 18,60 111,60'},
+  {kind:'normal',text:'Menge Artikel EP Preis St\n6 502 12,80 76,80\n7 360210 3,00 21,00\nGesamt EUR 111,60'},
+  {kind:'payment',text:'Gesamt EUR 111,60'},
+  {kind:'items',text:'Gesamt EUR 111,60'},
+  {kind:'focused',text:'Gesamt EUR 111,60'},
+  {kind:'middle',text:'Menge Artikel EP Preis St\n6 502 12,80 76,80\n7 360210 3,00 21,00\nGesamt EUR 111,60'}
+ ]);
+ assert.ok(result.amountCandidates.some(x=>x.amount===97.8&&x.mathEvidence.some(p=>p.kind==='line-items')));
+ assert.equal(result.amount,111.6);
+ assert.equal(result.amountConflict,false);
+ assert.equal(result.confidence,'medium');
+});
+test('incomplete line-items alone cannot overturn independently printed paid total',()=>{
+ const r=combineReceiptPasses([
+  {kind:'normal',text:'Menge Artikel EP Preis St\n6 502 12,80 76,80\n7 360210 3,00 21,00\nGesamt EUR 111,60'},
+  {kind:'payment',text:'Gesamt EUR 111,60\nEFT EUR 111,60'}
+ ]);
+ assert.equal(r.amount,111.6);
+ assert.equal(r.amountConflict,false);
+});
