@@ -41,7 +41,7 @@ async function createPassImage(image,kind,band){
   const base=paperCropRect(originalW,originalH,focused?band:null);
   // Header and footer are targeted separately: scanning the complete tall
   // image five times would be too slow on an iPhone.
-  const region=kind==='totals'?[.44,.41]:kind==='header'?[0,.48]:kind==='middle'?[.22,.5]:kind==='payment'?[.30,.55]:kind==='bottom'?[.35,.65]:[0,1];
+  const region=kind==='items'?[.25,.50]:kind==='tax'?[.67,.31]:kind==='totals'?[.44,.41]:kind==='header'?[0,.48]:kind==='middle'?[.22,.5]:kind==='payment'?[.30,.55]:kind==='bottom'?[.35,.65]:[0,1];
   const cropY=Math.floor(originalH*region[0]);
   const cropH=Math.max(1,Math.min(originalH-cropY,Math.floor(originalH*region[1])));
   const maxW=focused?1750:1950;
@@ -60,6 +60,8 @@ async function createPassImage(image,kind,band){
   ctx.filter={
     normal:'grayscale(100%) contrast(112%)',
     totals:'grayscale(100%) contrast(120%)',
+    items:'grayscale(100%) contrast(126%)',
+    tax:'grayscale(100%) contrast(120%)',
     focused:'grayscale(100%) contrast(128%)',
     enhanced:'grayscale(100%) contrast(162%)',
     header:'grayscale(100%) contrast(140%)',
@@ -105,7 +107,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
   let closed=false;
   async function recognizePass(image,kind,band){
     const modes={
-      normal:PSM.AUTO,totals:PSM.SINGLE_BLOCK,focused:PSM.SINGLE_COLUMN,enhanced:PSM.SINGLE_BLOCK,
+      normal:PSM.AUTO,totals:PSM.SINGLE_BLOCK,items:PSM.SINGLE_BLOCK,tax:PSM.SINGLE_BLOCK,focused:PSM.SINGLE_COLUMN,enhanced:PSM.SINGLE_BLOCK,
       header:PSM.SPARSE_TEXT,middle:PSM.AUTO,payment:PSM.AUTO,bottom:PSM.SPARSE_TEXT,soft:PSM.AUTO
     };
     await worker.setParameters({
@@ -135,7 +137,8 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
           if(!kind)break;
           attempted.push(kind);
           const labels={
-            normal:'celá fotografie',totals:'celková částka a zaplaceno',focused:'izolovaná účtenka',
+            normal:'celá fotografie',totals:'celková částka a zaplaceno',
+            items:'součet jednotlivých položek',tax:'kontrola daňového základu a DPH',focused:'izolovaná účtenka',
             enhanced:'zesílený tisk',header:'dodavatel v hlavičce',
             middle:'oblast skutečného součtu',payment:'kontrola platby bez ořezu papíru',bottom:'celková částka ve spodní části',
             soft:'kontrola slabého tisku'
@@ -150,7 +153,10 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
         }
         if(!passes.length)throw lastError||new Error('Text účtenky se nepodařilo rozpoznat.');
         const combined=combineReceiptPasses(passes);
-        const verified=isOcrCertain(combined);
+        // In maximum-quality mode, two passes can repeat the SAME OCR digit
+        // error. Complete both arithmetic crops before claiming green status.
+        const verified=isOcrCertain(combined)&&
+          (requestedMode!=='max'||(passes.some(p=>p.kind==='items')&&passes.some(p=>p.kind==='tax')));
         // Two reads may repeat the same digit error. When the phone reaches
         // its time budget early, show the candidate but require review.
         const confidence=requestedMode==='max'&&combined.confidence==='high'&&!verified?

@@ -128,3 +128,46 @@ test('competing reconciled gross totals remain unresolved instead of guessing',(
  assert.equal(r.amountConflict,true);
  assert.equal(r.arithmeticSuggestion,false);
 });
+
+test('actual IMG8113 OCR fragments: two line items produce paid 615, not 613',()=>{
+ const r=combineReceiptPasses([
+  {kind:'totals',text:'Pitztaler Gletscherbahn\nGesamt EUR 613,00'},
+  {kind:'normal',text:'Stk Typ Einzelpreis Gesamt\n1 SCT Kind 613,00 613,00\n1 SCT PF+ 2,00 2,00\nKrediikarle MasterCard 615,00'},
+  {kind:'payment',text:'Kreditkarte MasterCard 615,00\nGesamt EUR 615,00'}
+ ]);
+ assert.equal(r.amount,615);
+ assert.equal(r.amountConflict,true);
+ assert.equal(r.arithmeticSuggestion,true);
+ assert.equal(r.totalVerified,false);
+ assert.notEqual(r.confidence,'high');
+});
+test('actual IMG8114 OCR fragments: VAT base/rate corrects misread 127.18 total',()=>{
+ const r=combineReceiptPasses([
+  {kind:'totals',text:'GUTMANN\n03.11.2026\nGESAMT BETRAG EUR 127,18'},
+  {kind:'normal',text:'DIESEL 58,241\nSTEUERANTEIL 21,30 EUR\nGESAMT BETRAG EUR 127,18\nMUST B 20% VON 106,48 21,30'},
+  {kind:'payment',text:'CELKOM-EFT EUR 127,18'}
+ ]);
+ assert.equal(r.amount,127.78);
+ assert.equal(r.amountConflict,true);
+ assert.equal(r.arithmeticSuggestion,true);
+ assert.equal(r.totalVerified,false);
+ assert.notEqual(r.confidence,'high');
+});
+test('a single item calculation without printed total can be suggested, never verified',()=>{
+ const r=combineReceiptPasses([
+  {kind:'middle',text:'Stk Typ Einzelpreis Gesamt\n1 SCT Kind 613,00 613,00\n1 SCT PF+ 2,00 2,00'}
+ ]);
+ assert.equal(r.amount,615);
+ assert.equal(r.arithmeticSuggestion,true);
+ assert.equal(r.totalVerified,false);
+ assert.equal(r.confidence,'medium');
+});
+test('two contradictory arithmetic proofs are not safe to prefill',()=>{
+ const r=combineReceiptPasses([
+  {kind:'middle',text:'Stk Typ Einzelpreis Gesamt\n1 SCT Kind 613,00 613,00\n1 SCT PF+ 2,00 2,00'},
+  {kind:'bottom',text:'St Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80'}
+ ]);
+ assert.equal(r.amount,null);
+ assert.equal(r.amountConflict,true);
+ assert.equal(r.arithmeticSuggestion,false);
+});

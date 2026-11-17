@@ -1,4 +1,5 @@
 import {parseReceiptText,compactText} from './receipt-parse.mjs';
+import {receiptMathEvidence} from './receipt-math.mjs';
 
 /**
  * Combine OCR reads from distinct layouts. Header-only text is used for merchant
@@ -30,7 +31,7 @@ export function combineReceiptPasses(passes){
       if(!Number.isFinite(key)||key<=0)continue;
       let item=amountMap.get(key);
       if(!item){
-        item={...option,score:0,passNames:[],totalPassNames:[],paidPassNames:[],grossPassNames:[]};
+        item={...option,score:0,passNames:[],totalPassNames:[],paidPassNames:[],grossPassNames:[],mathEvidence:[]};
         amountMap.set(key,item);
       }
       item.score=Math.max(item.score,option.score);
@@ -42,20 +43,37 @@ export function combineReceiptPasses(passes){
       if(option.paidLine&&!item.paidPassNames.includes(entry.kind))item.paidPassNames.push(entry.kind);
       if(option.taxRowGross&&!item.grossPassNames.includes(entry.kind))item.grossPassNames.push(entry.kind);
     }
+    // A mathematical amount can be recovered even if OCR lost the word
+    // "Gesamt" or misread one of its digits; preserve it as a proposal.
+    for(const proof of receiptMathEvidence(entry.text)){
+      const key=Number(proof.amount);
+      let item=amountMap.get(key);
+      if(!item){
+        item={amount:key,score:7,passNames:[],totalPassNames:[],
+          paidPassNames:[],grossPassNames:[],mathEvidence:[],
+          isTotal:false,isPaid:false,explicitTotal:false};
+        amountMap.set(key,item);
+      }
+      if(!item.mathEvidence.some(x=>x.kind===proof.kind&&x.pass===entry.kind))
+        item.mathEvidence.push({kind:proof.kind,pass:entry.kind});
+    }
   }
   const hasPrintedEvidence=x=>!!(x?.totalPassNames?.length||x?.paidPassNames?.length);
   // Repetition of an item price must never outweigh a clearly labelled grand
   // total or card/cash payment. OCR passes are NOT independent receipts.
   const allAmounts=[...amountMap.values()].map(x=>({
-    ...x,score:x.score+3*(x.passNames.length-1)+
+    ...x,score:x.score+3*Math.max(0,x.passNames.length-1)+
       9*x.totalPassNames.length+7*x.paidPassNames.length
   }));
   // If a readable VAT row gives a reconciled gross value, that is stronger
   // evidence than a conflicting OCR digit on a labelled total elsewhere.
   // This is arithmetic on THIS receipt, not a remembered vendor/price.
   // Competing, independently reconciled gross values remain unresolved.
-  const reconciled=allAmounts.filter(x=>x.grossPassNames.length>0);
+  // Distinct calculations must agree. A second contradictory proof is a
+  // real ambiguity; never auto-select the top-scored number in that case.
+  const reconciled=allAmounts.filter(x=>x.grossPassNames.length>0||x.mathEvidence.length>0);
   const arithmeticWinner=reconciled.length===1?reconciled[0]:null;
+  const competingMath=reconciled.length>1;
   const amounts=allAmounts.sort((a,b)=>
     Number(b===arithmeticWinner)-Number(a===arithmeticWinner)||
     Number(hasPrintedEvidence(b))-Number(hasPrintedEvidence(a))||
@@ -67,22 +85,24 @@ export function combineReceiptPasses(passes){
     compactText(merchants[1].name)!==compactText(merchant.name));
   // Only a competing printed total/payment can create an amount conflict.
   // Item prices, tax, change and partial reads are not other grand totals.
-  const amountConflict=!!(best&&amounts.some(x=>x.amount!==best.amount&&
+  const amountConflict=!!(competingMath||(best&&amounts.some(x=>x.amount!==best.amount&&
     hasPrintedEvidence(x)&&(
       x.score>=best.score-8 ||
-      // A payment different from the printed total is a real contradiction
-      // even if the other number appeared in many more OCR passes.
+      // When independently reconciled arithmetic and OCR disagree, a
+      // transcription error is likely. Suggest the arithmetic but flag it.
+      !!arithmeticWinner ||
       (x.paidPassNames.length>0&&best.totalPassNames.length>0) ||
       (x.totalPassNames.length>0&&best.paidPassNames.length>0) ||
       (x.totalPassNames.length>0&&best.totalPassNames.length>0&&
        x.score>=best.score-16)
-    )));
+    ))));
   const verifiedTotal=!!(best&&best.totalPassNames.length&&best.paidPassNames.length&&
     new Set([...best.totalPassNames,...best.paidPassNames]).size>=2&&!amountConflict);
-  const arithmeticSuggestion=!!(arithmeticWinner&&best===arithmeticWinner&&amountConflict);
-  // A reconciled gross may be prefilled for a human to verify, but is NOT
-  // automatically approved while contradictory printed totals remain.
-  const amountConfidence=!best||!hasPrintedEvidence(best)?'low':
+  // Mathematics is useful to recover a proposed price, not to prove a
+  // transaction by itself. Require human approval before accounting export.
+  const arithmeticSuggestion=!!(arithmeticWinner&&best===arithmeticWinner&&!verifiedTotal);
+  const supported=!!(best&&(hasPrintedEvidence(best)||best.mathEvidence.length>0));
+  const amountConfidence=!supported||competingMath?'low':
     amountConflict?(arithmeticSuggestion?'medium':'low'):
     verifiedTotal?'high':'medium';
   const merchantConfidence=!merchant||merchant.score<24?'low':merchantConflict?'low':merchant.score>=47?'high':'medium';
@@ -93,7 +113,7 @@ export function combineReceiptPasses(passes){
   }
   const rawText=whole.map(x=>x.parsed.rawText).filter(Boolean).join('\n\n--- další průchod OCR ---\n\n').slice(0,16000);
   return {
-    amount:best?.score>=7&&hasPrintedEvidence(best)&&(!amountConflict||arithmeticSuggestion)?best.amount:null,
+    amount:!competingMath&&best?.score>=7&&supported&&(!amountConflict||arithmeticSuggestion)?best.amount:null,
     arithmeticSuggestion,totalVerified:verifiedTotal,amountConflict,
     amountCandidates:amounts,
     confidence:amountConfidence,
