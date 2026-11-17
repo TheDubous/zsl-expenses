@@ -189,3 +189,30 @@ test('unreconciled tax table must not promote rightmost price to printed total',
  const r=parseReceiptText('Steinblock GmbH\n09.11.2026\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,30');
  assert.equal(r.amountCandidates.some(c=>c.amount===96.3&&c.explicitTotal),false);
 });
+
+test('new Slovnaft photo uses Základ DPH Spolu, paid card 132.34 (not tax/base)',()=>{
+ const r=parseReceiptText([
+  'SLOVNAFT, a.s.',
+  'Dátum vyhotovenia: 02.11.2026 10:06:32',
+  'EVO Diesel 65.810 L 2.011 EUR/L 132.34',
+  'SUMA: 132.34 EUR',
+  'Sadzby Základ DPH Spolu',
+  '23% 107.59 24.75 132.34 EUR',
+  'Spolu: 107.59 24.75 132.34 EUR',
+  'PLATBY',
+  'Banková karta 132.34 EUR',
+  'UHRADENE 132.34 EUR',
+  'Platba: BANKOVA KARTA'
+ ].join('\n'));
+ assert.equal(r.amount,132.34);
+ assert.equal(r.merchant,'Slovnaft');
+ assert.equal(r.spent_on,'2026-11-02');
+ assert.equal(r.category,'fuel');
+ assert.equal(r.payment_method,'card');
+ assert.equal(r.amountCandidates[0].amount,132.34);
+ assert.ok(!r.amountCandidates.some(x=>(x.amount===107.59||x.amount===24.75)&&x.isTotal));
+});
+test('unreconciled Slovak VAT row is not a source of false grand totals',()=>{
+ const r=parseReceiptText(['SLOVNAFT','Sadzby Základ DPH Spolu','23% 107.59 24.15 132.34 EUR'].join('\n'));
+ assert.ok(!r.amountCandidates.some(x=>x.isTotal&&[107.59,24.15].includes(x.amount)));
+});
