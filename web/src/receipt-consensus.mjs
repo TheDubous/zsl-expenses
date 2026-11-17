@@ -42,7 +42,13 @@ export function combineReceiptPasses(passes){
   const second=amounts[1]||null;
   const merchant=merchants[0]||null;
   const merchantConflict=merchants[1]&&merchants[1].score>=merchant.score-4&&compactText(merchants[1].name)!==compactText(merchant.name);
-  const amountConflict=second&&second.score>=best.score-3&&second.amount!==best.amount;
+  const amountConflict=!!(second&&second.amount!==best.amount&&(
+    second.score>=best.score-3 ||
+    // A separately read footer showing a different printed total is a
+    // substantive disagreement, even if two full-image scans agree.
+    (best.isTotal&&second.isTotal&&second.score>=14&&
+      (best.passNames.includes('bottom')||second.passNames.includes('bottom')))
+  ));
   const amountConfidence=!best||best.score<7?'low':amountConflict?'low':best.passNames.length>1||best.score>=18?'high':'medium';
   const merchantConfidence=!merchant||merchant.score<24?'low':merchantConflict?'low':merchant.score>=47?'high':'medium';
   // If two supplier guesses compete, do not silently select either.
