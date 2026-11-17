@@ -35,6 +35,12 @@ export function receiptItemLabel(expense={}){
   if(petrol)return 'Benzín';
   return 'PHM';
  }
+ // Always prefer the actual receipt line over a vague merchant name.
+ if(match(/\b(?:vignett?e|vignette)\b/))
+  return match(/\ba10t?\b/)?'Diaľničná známka A10':'Diaľničná známka';
+ if(match(/\b(?:pisten\s*geb(?:uhr|uehr)?|pistengeb(?:uhr|uehr)?)\b/))
+  return 'Poplatok za trať';
+ if(match(/\bsct\s*kind\b/))return 'SCT Kind';
  // Separate piste/track rental from lift passes and race entry fees.
  if(match(/\b(?:startovn[eéy]|startovny|startovne|startgeld|nenngeld|entry\s*fee|registration\s*fee|race\s*fee|prihlasovac[iy]\s*poplatek)\b/))
   return 'Startovné';

@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {parseReceiptText} from '../src/receipt-parse.mjs';
+import {receiptItemLabel} from '../src/zsl-template-map.mjs';
 test('Slovnaft with repeated sum, unit price and VAT',()=>{
  const t='POTVRDENKA PRE ZAKAZNIKA\nSuma: 132.34\nSLOVNAFT, a.s.\n02.11.2026 10:06:32\nEVO Diesel\n65.810 L 2.011 EUR/L 132.34\nSUMA: 132.34 EUR\nZaklad 107.59 DPH 24.75\nSpolu: 132.34 EUR\nPlatba: BANKOVA KARTA';
  const x=parseReceiptText(t);assert.equal(x.amount,132.34);assert.equal(x.merchant,'Slovnaft');assert.equal(x.category,'fuel');assert.equal(x.spent_on,'2026-11-02');assert.equal(x.payment_method,'card');
@@ -65,4 +66,47 @@ test('race entry fee, slope rental and AdBlue classify to right broad expense gr
  assert.equal(parseReceiptText('AD BLUE 45,00 EUR').category,'fuel');
  assert.equal(parseReceiptText('Pronájem trati 300,00 EUR').category,'resort');
  assert.equal(parseReceiptText('Skipasy 100,00 EUR').category,'resort');
+});
+
+const SAMPLE_THERMAL_RECEIPTS=[
+ {id:'IMG_8113.jpeg',name:'Pitztaler Gletscherbahn',
+  text:'Pitztaler Gletscherbahn GmbH&Co KG\nMittelberg 103\nDatum: 03.11.2026 08:37\nVerkaufsbeleg Nr. 27511\nSCT Kind 613,00 613,00\nSCT PF+ 2,00 2,00\nKreditkarte MasterCard 615,00\nGesamt EUR 615,00\nNettobetrag 559,09\nEnthaltene MwSt 10% 55,91',
+  amount:615,merchant:'Pitztaler Gletscherbahn',category:'resort',method:'card',date:'2026-11-03',label:'SCT Kind'},
+ {id:'IMG_8114.jpeg',name:'Gutmann diesel',
+  text:'GUTMANN GMBH\nDISK TANKSTELLE\n03.11.2026 14:42\nBESCHREIBUNG MENGE SUMME FÜR\nZP01 DIESEL 58,24L 127,78\nSTEUERANTEIL 21,30 EUR\nPREIS/L 2,194 EUR\nG E S A M T BETRAG EUR: 127,78\nEUROCARD 127,78\nMASTERCARD CONTACTLESS\nMWST GESAMT EUR 21,30',
+  amount:127.78,merchant:'Gutmann',category:'fuel',method:'card',date:'2026-11-03',label:'Diesel'},
+ {id:'IMG_8115.jpeg',name:'Serways A10 vignette',
+  text:'Serways\nRastanlage Inntal West\nITM Handelsgesellschaft mbH\nRech. 10374898\n6 Nov 26 16:30\nAüsser Haus\nVignette A10T KFZ bis 3,5 12,80 E\nZw.-Summe 12,80€\nBezahlt 12,80€\nWechselgeld 0,20€\nSteuerpfl. Summe 0,00% 12,80 E\nSteuer 0,00% 0,00 E\nNetto 0,00% 12,80 E\nBargeld 13,00€',
+  amount:12.8,merchant:'Serways',category:'travel',method:'cash',date:'2026-11-06',label:'Diaľničná známka A10'},
+ {id:'IMG_8116.jpeg',name:'Pitztaler piste fee',
+  text:'Pitztaler Gletscherbahn GmbH&Co KG\nMittelberg 103\nDatum: 03.11.2026 08:36\nVerkaufsbeleg Nr. 27510\n1 PISTEN GEB 650,00 650,00\nKreditkarte MasterCard 650,00\nGesamt EUR 650,00\nNettobetrag 541,67\nEnthaltene MwSt 20% 108,33',
+  amount:650,merchant:'Pitztaler Gletscherbahn',category:'resort',method:'card',date:'2026-11-03',label:'Poplatok za trať'}
+];
+test('four submitted thermal receipt examples use correct paid totals and categories',()=>{
+ for(const x of SAMPLE_THERMAL_RECEIPTS){
+  const got=parseReceiptText(x.text);
+  assert.equal(got.amount,x.amount,x.name+' amount');
+  assert.equal(got.merchant,x.merchant,x.name+' supplier');
+  assert.equal(got.category,x.category,x.name+' category');
+  assert.equal(got.payment_method,x.method,x.name+' payment');
+  assert.equal(got.spent_on,x.date,x.name+' date');
+  assert.equal(receiptItemLabel({...got,ocr:{rawText:x.text}}),x.label,x.name+' item label');
+  assert.ok(got.amountCandidates[0]?.isTotal,x.name+' needs a printed grand total');
+ }
+});
+test('folded paid amount wins over change, tender, VAT and per-line prices',()=>{
+ const original=SAMPLE_THERMAL_RECEIPTS[2];
+ const got=parseReceiptText(original.text);
+ assert.equal(got.amount,12.8);
+ assert.ok(!got.amountCandidates.some(x=>x.amount===13), '13 EUR is tendered cash, not price');
+ assert.ok(!got.amountCandidates.some(x=>x.amount===0.2),'0.20 EUR is returned change');
+ const resort=parseReceiptText(SAMPLE_THERMAL_RECEIPTS[3].text);
+ assert.equal(resort.amount,650);
+ assert.ok(!resort.amountCandidates.some(x=>x.amount===108.33),'VAT is not grand total');
+});
+test('recognized Gesamt EUR and Bezahlt are grand-total indicators even when separated from number',()=>{
+ const a=parseReceiptText('Pitztaler Gletscherbahn\nSCT Kind 613,00\nSCT PF+ 2,00\nGesamt EUR\n615,00');
+ assert.equal(a.amount,615);
+ const b=parseReceiptText('Serways\n6 Nov 26\nZw.-Summe\n12,80 EUR\nBezahlt\n12,80 EUR\nBargeld 13,00');
+ assert.equal(b.amount,12.8);
 });

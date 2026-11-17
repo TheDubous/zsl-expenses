@@ -1,9 +1,10 @@
 // Deterministic, offline OCR interpretation. We retain alternative readings for human review.
-const totalHints=/(?:^|\b)(?:celkom(?:\s*-\s*eft)?|spolu|suma|total|amount|k\s*uhrade|na\s*uhradu|zaplaten[ée]|uhradene|uhradené|gesamt\s*betrag|gesamtsumme|summe|betrag|eurocard|gesamtbetrag|paid|endbetrag)(?:\b|:)/i;
-const penalized=/(?:dph|vat|tax|zaklad|základ|netto|base|jednotkov|vr[aá]ten[ée]|cash\s*back|rabatt|z[ľl]ava|discount|zostatok|m[wvv]st|ust\.?|ersparnis|ersparniss|ersparn|gespart|sie\s+sparen|sparen\s+sie|nachlass|gutschein|savings?|your\s+savings?|vorteil|steueranteil|preis\s*\/\s*l|pro\s*liter|ak.tionsrabatt)/i;
+const totalHints=/(?:^|\b)(?:celkom(?:\s*-\s*eft)?|spolu|suma|total|amount|k\s*uhrade|na\s*uhradu|zaplaten[ée]|uhradene|uhradené|gesamt\s*betrag|gesamtsumme|gesamt|(?:zw\.?\s*-?\s*)?summe|betrag|bezahlt|zahlung|eurocard|gesamtbetrag|paid|endbetrag)(?:\b|:)/i;
+const penalized=/(?:dph|vat|tax|zaklad|základ|netto|base|jednotkov|vr[aá]ten[ée]|cash\s*back|wechselgeld|rueckgeld|rückgeld|bargeld|gegeben|rueckgabe|rabatt|z[ľl]ava|discount|zostatok|m[wvv]st|ust\.?|ersparnis|ersparniss|ersparn|gespart|sie\s+sparen|sparen\s+sie|nachlass|gutschein|savings?|your\s+savings?|vorteil|steueranteil|preis\s*\/\s*l|pro\s*liter|ak.tionsrabatt)/i;
 const amountPattern=/(?:\d{1,3}(?:[ .\u00a0]\d{3})+|\d+)[,.]\d{2}(?!\d)/g;
 const BRANDS=[
   ['Pitztaler Gletscherbahn','pitztalergletscherbahn'],
+  ['Serways','serways'],
   ['INTERSPAR','interspar'],
   ['Slovnaft','slovnaft'],
   ['Gutmann','gutmann'],
@@ -74,7 +75,7 @@ function moneyCandidates(lines){
       const isTotal=totalHints.test(line)||totalHints.test(prev)||totalHints.test(compactLabel)||totalHints.test(prev.replace(/\s+/g,''));
       const hasCurrency=/(?:\bEUR\b|\bEURO\b|\bCZK\b|\bKČ\b|\bCHF\b|€)/i.test(line);
       const score=(isTotal?12:0)+(hasCurrency?3:0)-(isBad?14:0)+(matches.length===1?2:0)+(index>lines.length/3?1:0);
-      values.push({amount,score,line,lineNumber:index});
+      values.push({amount,score,line,lineNumber:index,isTotal,isPaid:/\b(?:bezahlt|gesamt|gesamtbetrag|celkom|spolu|suma|k\s*uhrade|total|summe|endbetrag)\b/i.test(compactLabel)});
     }
   });
   const counts=new Map();
@@ -92,6 +93,10 @@ function findDate(text){
   if(m)return validDate(+m[1],+m[2],+m[3]);
   m=text.match(/\b(0?[1-9]|[12]\d|3[01])\s*[./-]\s*(0?[1-9]|1[0-2])\s*[./-]\s*(20\d{2}|\d{2})\b/);
   if(m)return validDate(m[3].length===2?2000+(+m[3]):+m[3],+m[2],+m[1]);
+  // German/English printed month: "6 Nov 26 16:30".
+  const months={jan:1,feb:2,mar:3,apr:4,may:5,mai:5,jun:6,jul:7,aug:8,sep:9,oct:10,okt:10,nov:11,dec:12,dez:12};
+  m=text.match(/\b(0?[1-9]|[12]\d|3[01])\s+(jan|feb|mar|apr|may|mai|jun|jul|aug|sep|oct|okt|nov|dec|dez)[a-z]*\s+(20\d{2}|\d{2})\b/i);
+  if(m)return validDate(m[3].length===2?2000+Number(m[3]):+m[3],months[m[2].slice(0,3).toLowerCase()],+m[1]);
   return null;
 }
 function merchantSuggestions(lines){
@@ -130,15 +135,15 @@ function merchantSuggestions(lines){
 }
 function categoryOf(text){
   if(/\b(ad\s*blue|adblue|diesel|nafta|benz[ií]n|benzin|kraftstoff|fuel|tankovanie|tankstelle|čerpac[íi]|phm|super\s*95|super\s*98)\b/i.test(text))return 'fuel';
-  if(/\b(skipass|ski\s*pass|skipasy|skipassy|skipas|piste|pista|lanovka|gletscherbahn|liftkarte|liftpass|bergbahn|rennstrecke|startovn[eé]|startgeld|nenngeld|streckenmiete|pistenmiete|(?:pron[aá]jem|pren[aá]jem|pren[aá]jom)\s*trat[iěe])\b/i.test(text))return 'resort';
+  if(/\b(skipass|ski\s*pass|skipasy|skipassy|skipas|piste|pista|lanovka|gletscherbahn|liftkarte|liftpass|bergbahn|rennstrecke|startovn[eé]|startgeld|nenngeld|streckenmiete|pistenmiete|pisten\s*geb(?:uhr|uehr|uehren)?|pistengeb|(?:pron[aá]jem|pren[aá]jem|pren[aá]jom)\s*trat[iěe])\b/i.test(text))return 'resort';
   if(/\b(hotel|pension|pensi[oó]n|ubytov|zimmer|unterkunft|booking)\b/i.test(text))return 'lodging';
   if(/\b(restaur|restaurant|grocery|market|interspar|spar|lidl|hofer|billa|potravin|supermarket|bistro|strava)\b/i.test(text))return 'food';
-  if(/\b(taxi|vlak|train|autobus|bus|ticket|mýto|m[yý]to|parking|parkovn|dálni[cč]ní|vignette)\b/i.test(text))return 'travel';
+  if(/\b(taxi|vlak|train|autobus|bus|ticket|mýto|m[yý]to|parking|parkovn|dálni[cč]ní|vignette|vignett[e]?)\b/i.test(text))return 'travel';
   return 'other';
 }
 function methodOf(text){
-  if(/\b(?:bankov[aá]\s*karta|platba\s*kart|payment\s*card|kartou|credit\s*card|debit\s*card|visa|mastercard|kontaktlos|kartenzahlung)\b/i.test(text))return 'card';
-  if(/\b(?:hotovos[tť]|cash\s*payment|bar\s*zahlung|barzahlung)\b/i.test(text))return 'cash';
+  if(/\b(?:bankov[aá]\s*karta|platba\s*kart|payment\s*card|kartou|credit\s*card|debit\s*card|kreditkarte|eurocard|visa|mastercard|kontaktlos|contactless|kartenzahlung)\b/i.test(text))return 'card';
+  if(/\b(?:hotovos[tť]|cash\s*payment|bar\s*zahlung|barzahlung|bargeld|bar\s*bezahlt)\b/i.test(text))return 'cash';
   return 'unknown';
 }
 export function parseReceiptText(text){

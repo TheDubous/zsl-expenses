@@ -18,7 +18,7 @@ export function isOcrCertain(result){
  const winner=result.amountCandidates?.find(v=>v.amount===result.amount);
  // A confidently printed single total can still be an OCR typo. Require
  // agreement across genuinely different raster treatments before stopping.
- return new Set(winner?.passNames||[]).size>=2;
+ return !!winner?.isTotal&&new Set(winner?.passNames||[]).size>=2;
 }
 export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elapsedMs=0}={}){
  const done=new Set(passes.map(p=>typeof p==='string'?p:p.kind));
@@ -37,7 +37,8 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
  // cheaper for "Summe" or "Celkem"; a header scan helps fuzzy vendor names.
  const weakAmount=!Number(result?.amount)||result?.confidence!=='high';
  const weakMerchant=!result?.merchant||result?.merchantConfidence!=='high';
- if(weakAmount&&!done.has('bottom'))return 'bottom';
+ if(weakAmount&&!done.has('middle'))return 'middle';
+ if(weakAmount&&!done.has('bottom')&&done.has('middle'))return 'bottom';
  if(weakMerchant&&!done.has('header'))return 'header';
  // Date missing or disagreement: try a differently contrasted full receipt.
  if(!done.has('enhanced'))return 'enhanced';

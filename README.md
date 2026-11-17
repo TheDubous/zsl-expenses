@@ -1,5 +1,7 @@
 # ZSL Expenses
 
+**v0.9.4:** Opravený OCR ořez přehnutých německých účtenek, nová kontrola středové části, rozpoznání Gesamt/Bezahlt, Serways dálniční známky a Pitztaler poplatku za trať. [Podrobnosti](./web/README.md).
+
 **v0.9.3:** Výchozí Maximální přesnost OCR pro fotky účtenek; čeština, slovenština, němčina a angličtina; adaptivní kontrolní průchody s měkkým časovým limitem. [Podrobnosti](./web/README.md).
 
 **v0.9.2:** PDF jízdenky, faktury a účtenky se čtou automaticky ze všech stran; výsledná daňová částka má přednost před dílčími cenami. Doklady v CZK bezpečně čekají na skutečný přepočet do EUR a lze je znovu načíst bez nahrávání. [Návod a bezpečnost měn](./web/README.md).
