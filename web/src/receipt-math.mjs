@@ -22,7 +22,7 @@ export function receiptMathEvidence(text){
    const heading=lines.slice(Math.max(0,i-3),i).join(' ');
    // A line after Netto / USt / Brutto contains 3 separate values.
    if(values.length>=3&&
-       /netto[\s\S]{0,60}(?:u\s*st|mwst|vat|steuer)[\s\S]{0,60}brutto/i.test(heading)){
+       /(?:netto[\s\S]{0,60}(?:u\s*st|mwst|vat|steuer)[\s\S]{0,60}brutto|z[aá]klad[\s\S]{0,60}dph[\s\S]{0,60}(?:spolu|suma|celkom)|excl[\s\S]{0,60}(?:mwst|vat|dph)[\s\S]{0,60}incl)/i.test(heading)){
      const [net,tax,gross]=values.slice(-3);
      if(near(net+tax,gross))add(gross,'vat-columns',line);
    }
