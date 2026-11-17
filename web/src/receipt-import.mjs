@@ -17,20 +17,30 @@ export function originalAmountDisplay(expense){
  catch{return n.toFixed(2)+' '+unit}
 }
 export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan=false}={}){
- const sourceCurrency=found.sourceCurrency||null;
- const sourceAmount=Number(found.sourceAmount||0)>0?Number(found.sourceAmount):null;
+ const sourceCurrency=found.sourceCurrency||(rescan?expense.sourceCurrency:null)||null;
+ const sourceAmount=Number(found.sourceAmount||0)>0?Number(found.sourceAmount):
+  rescan&&Number(expense.sourceAmount||0)>0?Number(expense.sourceAmount):null;
  const conversionRequired=!!(sourceAmount&&(!sourceCurrency||sourceCurrency!==eventCurrency));
- const priorConfirmed=rescan&&!!expense.conversionConfirmed&&Number(expense.amount)>0;
- const amount=conversionRequired?(priorConfirmed?Number(expense.amount):0):
-  rescan&&Number(expense.amount)>0?Number(expense.amount):Number(found.amount||0);
+ const previousAmount=Number(expense.amount||0);
+ const recognizedAmount=Number(found.amount||0);
+ const manuallyReviewed=!!(rescan&&expense.ocr?.reviewed);
+ const priorConfirmed=!!(rescan&&expense.conversionConfirmed&&previousAmount>0);
+ // The old rescan code always retained a nonzero amount, including an
+ // incorrect automatic reading. Trust a new recognized total unless the user
+ // has manually reviewed it; never replace a previous amount with a low-
+ // confidence guess or an unresolved conflict.
+ const amount=conversionRequired?(priorConfirmed?previousAmount:0):
+  manuallyReviewed&&previousAmount>0?previousAmount:
+  rescan&&previousAmount>0&&(!recognizedAmount||found.confidence==='low')?previousAmount:
+  recognizedAmount;
  const label=found.itemLabel||expense.itemLabel||'';
  return {
   ...expense,
   scanError:null,
   amount,sourceAmount,sourceCurrency,
   conversionConfirmed:conversionRequired?priorConfirmed:!!(sourceAmount&&sourceCurrency===eventCurrency),
-  merchant:rescan&&expense.ocr?.reviewed?expense.merchant||found.merchant||'':found.merchant||expense.merchant||'',
-  spent_on:found.spent_on||expense.spent_on,
+  merchant:manuallyReviewed?expense.merchant||found.merchant||'':found.merchant||expense.merchant||'',
+  spent_on:manuallyReviewed&&expense.spent_on?expense.spent_on:found.spent_on||expense.spent_on,
   category:rescan&&expense.category!=='other'?expense.category:found.category||expense.category,
   payment_method:rescan&&expense.payment_method!=='unknown'?expense.payment_method:found.payment_method||'unknown',
   itemLabel:rescan&&expense.itemLabel?expense.itemLabel:label,
@@ -40,9 +50,9 @@ export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan
    scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,
    ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,
    pdfPages:found.pdfPages||null,pdfTotalPage:found.pdfTotalPage||null,
-   rawText:found.rawText||'',reviewed:false,
-   autoReady:!conversionRequired&&found.confidence==='high'&&found.merchantConfidence==='high'&&
-    Number(found.amount)>0&&!!found.merchant&&!!found.spent_on,
+   rawText:found.rawText||'',reviewed:manuallyReviewed,
+   autoReady:!manuallyReviewed&&!conversionRequired&&found.confidence==='high'&&found.merchantConfidence==='high'&&
+    recognizedAmount>0&&!!found.merchant&&!!found.spent_on,
    scannedAt:new Date().toISOString()
   }
  };
