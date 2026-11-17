@@ -32,7 +32,7 @@ test('two good reads receive an independent footer verification in maximum mode'
   {kind:'normal',text:'GUTMANN GmbH\n03.11.2026\nDIESEL\nGESAMTBETRAG 127,78 EUR'},
   {kind:'bottom',text:'GESAMTBETRAG 127,78 EUR'}]);
  assert.equal(isOcrCertain(verified),true);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal','bottom'],result:verified}),'middle');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal','bottom'],result:verified}),null);
 });
 test('single pass and incomplete data never claim maximum certainty',()=>{
  const once=combineReceiptPasses([{kind:'normal',text:'SLOVNAFT\nDiesel 75,00\nTOTAL 127,78 EUR\n01.11.2026'}]);
