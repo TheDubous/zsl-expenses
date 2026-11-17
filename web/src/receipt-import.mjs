@@ -27,7 +27,7 @@ export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan
  // Native photo OCR must verify printed total and payment independently.
  // Text-based PDFs keep their existing accounting verification workflow.
  const photoEvidenceRequired=!!found.ocrMode&&!found.pdfPages;
- const safeForAuto=!photoEvidenceRequired||found.ocrVerified===true;
+ const safeForAuto=(!photoEvidenceRequired||found.ocrVerified===true)&&!found.amountConflict;
  const priorConfirmed=!!(rescan&&expense.conversionConfirmed&&previousAmount>0);
  // The old rescan code always retained a nonzero amount, including an
  // incorrect automatic reading. Trust a new recognized total unless the user
@@ -51,6 +51,7 @@ export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan
   ocr:{
    confidence:found.confidence,merchantConfidence:found.merchantConfidence,
    ocrVerified:photoEvidenceRequired?found.ocrVerified===true:null,
+   amountConflict:!!found.amountConflict,arithmeticSuggestion:!!found.arithmeticSuggestion,
    merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates||[],
    scannedPasses:found.scannedPasses||[],attemptedPasses:found.attemptedPasses||[],
    ocrDurationMs:found.ocrDurationMs||null,ocrLanguage:found.ocrLanguage,

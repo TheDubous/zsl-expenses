@@ -30,7 +30,7 @@ export function combineReceiptPasses(passes){
       if(!Number.isFinite(key)||key<=0)continue;
       let item=amountMap.get(key);
       if(!item){
-        item={...option,score:0,passNames:[],totalPassNames:[],paidPassNames:[]};
+        item={...option,score:0,passNames:[],totalPassNames:[],paidPassNames:[],grossPassNames:[]};
         amountMap.set(key,item);
       }
       item.score=Math.max(item.score,option.score);
@@ -40,15 +40,24 @@ export function combineReceiptPasses(passes){
       if(!item.passNames.includes(entry.kind))item.passNames.push(entry.kind);
       if(option.explicitTotal&&!item.totalPassNames.includes(entry.kind))item.totalPassNames.push(entry.kind);
       if(option.paidLine&&!item.paidPassNames.includes(entry.kind))item.paidPassNames.push(entry.kind);
+      if(option.taxRowGross&&!item.grossPassNames.includes(entry.kind))item.grossPassNames.push(entry.kind);
     }
   }
   const hasPrintedEvidence=x=>!!(x?.totalPassNames?.length||x?.paidPassNames?.length);
   // Repetition of an item price must never outweigh a clearly labelled grand
   // total or card/cash payment. OCR passes are NOT independent receipts.
-  const amounts=[...amountMap.values()].map(x=>({
+  const allAmounts=[...amountMap.values()].map(x=>({
     ...x,score:x.score+3*(x.passNames.length-1)+
       9*x.totalPassNames.length+7*x.paidPassNames.length
-  })).sort((a,b)=>
+  }));
+  // If a readable VAT row gives a reconciled gross value, that is stronger
+  // evidence than a conflicting OCR digit on a labelled total elsewhere.
+  // This is arithmetic on THIS receipt, not a remembered vendor/price.
+  // Competing, independently reconciled gross values remain unresolved.
+  const reconciled=allAmounts.filter(x=>x.grossPassNames.length>0);
+  const arithmeticWinner=reconciled.length===1?reconciled[0]:null;
+  const amounts=allAmounts.sort((a,b)=>
+    Number(b===arithmeticWinner)-Number(a===arithmeticWinner)||
     Number(hasPrintedEvidence(b))-Number(hasPrintedEvidence(a))||
     b.score-a.score||b.amount-a.amount).slice(0,8);
   const best=amounts[0]||null;
@@ -70,7 +79,11 @@ export function combineReceiptPasses(passes){
     )));
   const verifiedTotal=!!(best&&best.totalPassNames.length&&best.paidPassNames.length&&
     new Set([...best.totalPassNames,...best.paidPassNames]).size>=2&&!amountConflict);
-  const amountConfidence=!best||!hasPrintedEvidence(best)||amountConflict?'low':
+  const arithmeticSuggestion=!!(arithmeticWinner&&best===arithmeticWinner&&amountConflict);
+  // A reconciled gross may be prefilled for a human to verify, but is NOT
+  // automatically approved while contradictory printed totals remain.
+  const amountConfidence=!best||!hasPrintedEvidence(best)?'low':
+    amountConflict?(arithmeticSuggestion?'medium':'low'):
     verifiedTotal?'high':'medium';
   const merchantConfidence=!merchant||merchant.score<24?'low':merchantConflict?'low':merchant.score>=47?'high':'medium';
   // If two supplier guesses compete, do not silently select either.
@@ -80,8 +93,8 @@ export function combineReceiptPasses(passes){
   }
   const rawText=whole.map(x=>x.parsed.rawText).filter(Boolean).join('\n\n--- další průchod OCR ---\n\n').slice(0,16000);
   return {
-    amount:best?.score>=7&&hasPrintedEvidence(best)&&!amountConflict?best.amount:null,
-    totalVerified:verifiedTotal,amountConflict,
+    amount:best?.score>=7&&hasPrintedEvidence(best)&&(!amountConflict||arithmeticSuggestion)?best.amount:null,
+    arithmeticSuggestion,totalVerified:verifiedTotal,amountConflict,
     amountCandidates:amounts,
     confidence:amountConfidence,
     merchant:topMerchant,merchantCandidates:merchants,merchantConfidence,
