@@ -54,6 +54,7 @@ export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan
    amountConflict:!!found.amountConflict,arithmeticSuggestion:!!found.arithmeticSuggestion,
    merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates||[],
    scannedPasses:found.scannedPasses||[],attemptedPasses:found.attemptedPasses||[],
+   passDiagnostics:found.passDiagnostics||[],failedPasses:found.failedPasses||[],
    ocrDurationMs:found.ocrDurationMs||null,ocrLanguage:found.ocrLanguage,
    ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,
    pdfPages:found.pdfPages||null,pdfTotalPage:found.pdfTotalPage||null,

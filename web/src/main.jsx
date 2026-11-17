@@ -9,6 +9,7 @@ import ReceiptViewer from './ReceiptViewer.jsx';
 import {createOCRSession,canRecognize} from './ocr.js';
 import {recognizePdf,isPdf} from './pdf-reader.js';
 import {mergeRecognizedExpense,isCurrencyConversionPending,requiresCurrencyConversion,originalAmountDisplay} from './receipt-import.mjs';
+import {buildOcrDiagnostic} from './ocr-diagnostics.mjs';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
 import {exportExpenseReadiness,receiptItemLabel,isMotorwayVignette} from './zsl-template-map.mjs';
@@ -228,6 +229,14 @@ function App(){
           'OCR při tomto čtení nezískalo spolehlivou částku. Originální účtenka zůstává uložená; otevři Upravit a zkontroluj rozpoznaný text.');
       }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
     });
+  }
+  function exportOcrDiagnostic(expense){
+    if(!expense?.ocr)return;
+    const report=buildOcrDiagnostic(expense);
+    const stamp=new Date().toISOString().replace(/[-:]/g,'').slice(0,15);
+    const fileName='ZSL_OCR_Diagnostika_'+stamp+'.json';
+    downloadBlob(new Blob([JSON.stringify(report,null,2)],{type:'application/json;charset=utf-8'}),fileName);
+    setNotice('OCR diagnostika stažena. Před sdílením zkontroluj osobní údaje v JSON.');
   }
   async function updateExpense(e){
     e.preventDefault();const f=new FormData(e.currentTarget),val=decimal(f.get('amount'));
@@ -562,6 +571,8 @@ function App(){
               <span className="muted smalltext" key={i}>{currency(c.amount,c.currency||'EUR')} (cizí měna – nelze vložit jako EUR)</span>:
               <button key={i} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('amount');if(inp)inp.value=String(c.amount).replace('.',',')}}>{currency(c.amount,c.currency||active?.currency||'EUR')}{c.mathEvidence?.length?' · výpočet':''}</button>)}</div>}
             <details><summary>Zobrazit rozpoznaný text ({(editing.ocr.scannedPasses||[]).length||1} průchody · {editing.ocr.ocrLanguage||'automaticky'})</summary><pre>{editing.ocr.rawText||'Bez textu'}</pre></details>
+            <Button small secondary disabled={busy} onClick={()=>exportOcrDiagnostic(editing)}><Download size={15}/> Stáhnout OCR diagnostiku (.json)</Button>
+            <p className="muted smalltext">Diagnostika obsahuje jednotlivé OCR průchody, rozpoznané částky, skóre a důvody výběru. Fotografie ani bankovní přílohy se nepřidávají. Kontaktní údaje a dlouhá čísla maskujeme, ale jména či adresy mohou v textu zůstat – před sdílením soubor zkontroluj.</p>
           </div>}
           <p className="muted smalltext">Bankovní potvrzení můžeš přiložit později v seznamu dokladů. Změna způsobu platby z karty odstraní původní bankovní přílohu.</p>
           <Button type="submit" disabled={busy}><Check size={17}/> Uložit změny</Button>
