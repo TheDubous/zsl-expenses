@@ -37,3 +37,17 @@ test('unconfirmed foreign currency still cannot be added to EUR accounting total
  assert.equal(out.amount,0);
  assert.equal(isCurrencyConversionPending(out,'EUR'),true);
 });
+
+test('photo OCR cannot display green auto approval without independent verification',()=>{
+ const saved={amount:613,ocr:{reviewed:false,autoReady:true},category:'resort',payment_method:'card'};
+ const newer=mergeRecognizedExpense(saved,{...reading(613),ocrMode:'max',ocrVerified:false},'EUR',{rescan:true});
+ assert.equal(newer.amount,613);
+ assert.equal(newer.ocr.autoReady,false);
+ assert.equal(newer.ocr.ocrVerified,false);
+});
+test('verified photo OCR can be approved but manual correction stays untouched',()=>{
+ const saved={amount:660,ocr:{reviewed:false},category:'resort',payment_method:'card'};
+ const newer=mergeRecognizedExpense(saved,{...reading(650),ocrMode:'max',ocrVerified:true},'EUR',{rescan:true});
+ assert.equal(newer.amount,650);
+ assert.equal(newer.ocr.autoReady,true);
+});
