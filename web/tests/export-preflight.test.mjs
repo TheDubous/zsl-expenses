@@ -47,15 +47,18 @@ test('confirmed independent purchase suppresses only weak duplicate warning',()=
  const rows=[expense('a'),expense('b',{distinctPurchaseConfirmed:true})];
  assert.deepEqual(suspiciousReceiptGroups(rows),[]);
 });
-test('unconfirmed OCR conflicts are excluded, but missing bank confirmation alone is a warning',()=>{
+test('unconfirmed OCR amounts are included without mandatory approval, with visible OCR warnings',()=>{
  const e=expense('review',{amount:615,ocr:{reviewed:false,amountConflict:true,autoReady:false}});
- const review=exportExpenseReadiness(e,event);
- assert.equal(review.canExport,false);
- assert.match(review.issues.join(' '),/OCR/);
+ const status=exportExpenseReadiness(e,event);
+ assert.equal(status.canExport,true);
+ assert.match(status.warnings.join(' '),/neověřeného nebo rozporného OCR/);
+ const plan=buildTemplatePatches({event,trainer:{},expenses:[e],variant:'official'});
+ assert.equal(plan.skipped.length,0);
+ assert.ok(plan.patches.some(p=>p.group==='receipt:review'&&p.cell==='H49'&&p.value===615));
  const cleared={...e,ocr:{...e.ocr,reviewed:true}};
- const good=exportExpenseReadiness(cleared,event);
- assert.equal(good.canExport,true);
- assert.ok(good.warnings.some(x=>/bankovní potvrzení/.test(x)));
+ const reviewed=exportExpenseReadiness(cleared,event);
+ assert.equal(reviewed.canExport,true);
+ assert.ok(reviewed.warnings.some(x=>/bankovní potvrzení/.test(x)));
 });
 test('food remains unassigned until traveler chooses correct ZSL reimbursement section',()=>{
  const food={...expense('food'),merchant:'INTERSPAR',amount:55.84,
