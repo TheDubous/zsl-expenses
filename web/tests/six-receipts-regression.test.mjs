@@ -39,7 +39,7 @@ test('six uploaded receipt patterns never select another amount over supported p
   assert.equal(saved.ocr.autoReady,false,sample.name+' cannot claim auto-approved without independent photo verification');
  }
 });
-test('IMG_8113 and IMG_8114 disputed arithmetic totals require review before workbook',()=>{
+test('IMG_8113 and IMG_8114 detected amounts export automatically with OCR warnings',()=>{
  for(const sample of [cases[2],cases[3]]){
   const result=combineReceiptPasses(sample.passes);
   assert.equal(result.arithmeticSuggestion,true,sample.name);
@@ -49,7 +49,9 @@ test('IMG_8113 and IMG_8114 disputed arithmetic totals require review before wor
    spent_on:'2026-11-03',receipt_path:'photo',payment_method:'card',
    ocr:{reviewed:false,amountConflict:true,arithmeticSuggestion:true,autoReady:false}
   };
-  assert.equal(exportExpenseReadiness(expense,{currency:'EUR'}).canExport,false);
+  const ready=exportExpenseReadiness(expense,{currency:'EUR'});
+  assert.equal(ready.canExport,true);
+  assert.ok(ready.warnings.some(x=>/neověřeného nebo rozporného OCR/.test(x)));
   assert.equal(exportExpenseReadiness({...expense,ocr:{...expense.ocr,reviewed:true}},{currency:'EUR'}).canExport,true);
  }
 });
