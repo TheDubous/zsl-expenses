@@ -61,6 +61,7 @@ export function buildOcrDiagnostic(expense={}){
      verified:ocr.ocrVerified===true,
      amountConflict:!!ocr.amountConflict,
      arithmeticSuggestion:!!ocr.arithmeticSuggestion,
+     evidenceSuggestion:!!ocr.evidenceSuggestion,
      cropDetected:!!ocr.receiptCropDetected,
      durationMs:Number(ocr.ocrDurationMs)||null,
      attemptedPasses:ocr.attemptedPasses||[],
