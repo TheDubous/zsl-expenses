@@ -7,7 +7,7 @@
 const CONFIG={
  fast:{maxPasses:2,budgetMs:30000},
  precise:{maxPasses:4,budgetMs:60000},
- max:{maxPasses:5,budgetMs:75000}
+ max:{maxPasses:6,budgetMs:90000}
 };
 export function ocrConfig(mode='max'){
  return CONFIG[mode]||CONFIG.max;
@@ -18,7 +18,7 @@ export function isOcrCertain(result){
  const winner=result.amountCandidates?.find(v=>v.amount===result.amount);
  // A confidently printed single total can still be an OCR typo. Require
  // agreement across genuinely different raster treatments before stopping.
- return !!winner?.isTotal&&new Set(winner?.passNames||[]).size>=2;
+ return !!winner?.isTotal&&new Set(winner?.passNames||[]).size>=3;
 }
 export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elapsedMs=0}={}){
  const done=new Set(passes.map(p=>typeof p==='string'?p:p.kind));
@@ -33,6 +33,11 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
  if(!done.has(primary))return primary;
  if(!done.has(secondary))return secondary;
  if(isOcrCertain(result))return null;
+ // Two agreeing OCR passes can share the same digit error; verify the
+ // printed total with a separate footer crop in the maximum-quality mode.
+ if(mode==='max'&&done.size===2&&result?.confidence==='high'&&
+    result?.amountCandidates?.some(v=>v.amount===result.amount&&v.isTotal)&&
+    !done.has('bottom'))return 'bottom';
  // Use targeted regions before extra full-page reads. A bottom scan is much
  // cheaper for "Summe" or "Celkem"; a header scan helps fuzzy vendor names.
  const weakAmount=!Number(result?.amount)||result?.confidence!=='high';
