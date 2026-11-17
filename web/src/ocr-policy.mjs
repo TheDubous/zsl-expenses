@@ -33,6 +33,11 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
  if(!done.has(primary))return primary;
  if(!done.has(secondary))return secondary;
  if(isOcrCertain(result))return null;
+ // Two agreeing OCR passes can share the same digit error; verify the
+ // printed total with a separate footer crop in the maximum-quality mode.
+ if(mode==='max'&&done.size===2&&result?.confidence==='high'&&
+    result?.amountCandidates?.some(v=>v.amount===result.amount&&v.isTotal)&&
+    !done.has('bottom'))return 'bottom';
  // Use targeted regions before extra full-page reads. A bottom scan is much
  // cheaper for "Summe" or "Celkem"; a header scan helps fuzzy vendor names.
  const weakAmount=!Number(result?.amount)||result?.confidence!=='high';
