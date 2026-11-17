@@ -3,6 +3,7 @@ const totalHints=/(?:^|\b)(?:celkom(?:\s*-\s*eft)?|spolu|suma|total|amount|k\s*u
 const penalized=/(?:dph|vat|tax|zaklad|základ|netto|base|jednotkov|vr[aá]ten[ée]|cash\s*back|wechselgeld|rueckgeld|rückgeld|bargeld|gegeben|rueckgabe|rabatt|z[ľl]ava|discount|zostatok|m[wvv]st|ust\.?|ersparnis|ersparniss|ersparn|gespart|sie\s+sparen|sparen\s+sie|nachlass|gutschein|savings?|your\s+savings?|vorteil|steueranteil|preis\s*\/\s*l|pro\s*liter|ak.tionsrabatt)/i;
 const amountPattern=/(?:\d{1,3}(?:[ .\u00a0]\d{3})+|\d+)[,.]\d{2}(?!\d)/g;
 const BRANDS=[
+  ['Steinblock GmbH','steinblock'],
   ['Pitztaler Gletscherbahn','pitztalergletscherbahn'],
   ['Serways','serways'],
   ['INTERSPAR','interspar'],
@@ -84,7 +85,8 @@ function moneyCandidates(lines){
     const taxHeader=lines.slice(Math.max(0,index-3),index).join(' ');
     const taxSummary=matches.length>=3&&explicitTotal&&
       /netto[\s\S]{0,50}(?:u\s*st|mwst|vat|steuer)[\s\S]{0,50}brutto/i.test(taxHeader);
-    const selected=taxSummary?[matches[matches.length-1]]:matches;
+    const summaryColumns=matches.length>=2&&explicitTotal&&/\b(?:gesamt|total|spolu|suma|celkom)\b/i.test(line);
+    const selected=(taxSummary||summaryColumns)?[matches[matches.length-1]]:matches;
     for(const m of selected){
       const amount=parseNumber(m[0]);
       if(!Number.isFinite(amount)||amount<=0||amount>100000)continue;
@@ -164,7 +166,7 @@ function categoryOf(text){
   return 'other';
 }
 function methodOf(text){
-  if(/\b(?:bankov[aá]\s*karta|platba\s*kart|payment\s*card|kartou|credit\s*card|debit\s*card|kreditkarte|eurocard|visa|mastercard|kontaktlos|contactless|kartenzahlung)\b/i.test(text))return 'card';
+  if(/\b(?:eft|bankov[aá]\s*karta|platba\s*kart|payment\s*card|kartou|credit\s*card|debit\s*card|kreditkarte|eurocard|visa|mastercard|kontaktlos|contactless|kartenzahlung)\b/i.test(text))return 'card';
   if(/\b(?:hotovos[tť]|cash\s*payment|bar\s*zahlung|barzahlung|bargeld|bar\s*bezahlt)\b/i.test(text))return 'cash';
   return 'unknown';
 }
