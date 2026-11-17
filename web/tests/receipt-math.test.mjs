@@ -28,3 +28,7 @@ test('mathematical evidence is rejected if row multiplication or VAT percent fai
 test('unrelated prices, payment records and date fragments are never summed',()=>{
  assert.deepEqual(amounts('Gesamt 98,80 EUR\nEFT 96,80 EUR\n09.11.2026\nMwSt Gesamt 16,13'),[]);
 });
+
+test('actual thermal OCR may insert space before decimal comma in VAT base',()=>{
+ assert.deepEqual(amounts('MUST B 20% VON 106 ,48 21,30'),[127.78]);
+});
