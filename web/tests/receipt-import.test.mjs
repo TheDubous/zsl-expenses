@@ -63,3 +63,15 @@ test('a VAT-based 96.80 suggestion is saved for review but never auto-approved',
  assert.equal(newExpense.ocr.autoReady,false);
  assert.equal(newExpense.ocr.reviewed,false);
 });
+
+test('repeated 615 against isolated 619 is suggested but not auto-approved or exported',()=>{
+ const saved={amount:0,merchant:'',category:'resort',payment_method:'card',ocr:{reviewed:false}};
+ const found={...reading(615,'medium'),ocrMode:'max',ocrVerified:false,
+  amountConflict:true,evidenceSuggestion:true,arithmeticSuggestion:false};
+ const next=mergeRecognizedExpense(saved,found,'EUR',{rescan:true});
+ assert.equal(next.amount,615);
+ assert.equal(next.ocr.amountConflict,true);
+ assert.equal(next.ocr.evidenceSuggestion,true);
+ assert.equal(next.ocr.autoReady,false);
+ assert.equal(next.ocr.reviewed,false);
+});
