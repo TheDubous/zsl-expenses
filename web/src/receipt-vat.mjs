@@ -34,14 +34,14 @@ export function analyzeVatTable(input){
   // Thermal receipts sometimes print the heading *below* the first row.
   const nearby=lines.slice(Math.max(0,i-5),Math.min(lines.length,i+5)).join(' ');
   if(!headerPattern.test(nearby))continue;
-  rows.push({index:i,net,tax,gross,rate:rateOf(line)});
+  rows.push({index:i,net,tax,gross,rate:rateOf(line),hasRateMarker:/%/.test(line)});
  }
  const distinctRates=new Set(rows.map(r=>r.rate).filter(v=>v!==null));
  const multiRate=distinctRates.size>=2;
  // Multi-rate receipts may have missing classes in an OCR crop. Sum only if
  // the calculated total matches a separately PRINTED grand total or payment
  // in this SAME OCR pass. An incomplete table cannot invent a grand total.
- const totalCents=rows.filter(r=>r.rate!==null).reduce((sum,r)=>sum+r.gross,0);
+ const totalCents=rows.filter(r=>r.hasRateMarker).reduce((sum,r)=>sum+r.gross,0);
  const matchingPrinted=multiRate&&totalCents>0&&lines.some((line,i)=>{
    if(rows.some(r=>r.index===i))return false;
    return /(?:^|\b)(?:summe|suma|celkom|spolu|gesamt|total|paid|bezahlt|uhradene|zahlung\s+visa|kreditkarte|betrag\s+eur)\b/i.test(line)&&
