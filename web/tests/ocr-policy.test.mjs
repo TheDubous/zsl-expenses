@@ -83,13 +83,13 @@ test('Steinblock IMG8111 sum region cannot be deferred past first slow full-imag
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:[]}), 'totals');
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],elapsedMs:45000}), 'normal');
  const one=combineReceiptPasses([{kind:'totals',text:
-  'Gesamt EUR 96,80\\nSt Satz Netto USt Brutto\\nGesamt: 80,67 16,13 96,80\\nEFT EUR 96,80'}]);
+  'Gesamt EUR 96,80\nSt Satz Netto USt Brutto\nGesamt: 80,67 16,13 96,80\nEFT EUR 96,80'}]);
  assert.equal(one.amount,96.8);
  assert.equal(one.totalVerified,false);
  assert.equal(one.confidence,'medium');
  const both=combineReceiptPasses([
-  {kind:'totals',text:'Gesamt EUR 96,80\\nGesamt: 80,67 16,13 96,80\\nEFT EUR 96,80'},
-  {kind:'normal',text:'Steinblock GmbH\\n09.11.2026\\nGesamt EUR 96,80\\nBezahlt: EFT EUR 96,80'}
+  {kind:'totals',text:'Gesamt EUR 96,80\nGesamt: 80,67 16,13 96,80\nEFT EUR 96,80'},
+  {kind:'normal',text:'Steinblock GmbH\n09.11.2026\nGesamt EUR 96,80\nBezahlt: EFT EUR 96,80'}
  ]);
  assert.equal(both.amount,96.8);
  assert.equal(both.totalVerified,true);
