@@ -62,7 +62,7 @@ export function combineReceiptPasses(passes){
   // Repetition of an item price must never outweigh a clearly labelled grand
   // total or card/cash payment. OCR passes are NOT independent receipts.
   const allAmounts=[...amountMap.values()].map(x=>({
-    ...x,score:x.score+3*(x.passNames.length-1)+
+    ...x,score:x.score+3*Math.max(0,x.passNames.length-1)+
       9*x.totalPassNames.length+7*x.paidPassNames.length
   }));
   // If a readable VAT row gives a reconciled gross value, that is stronger
