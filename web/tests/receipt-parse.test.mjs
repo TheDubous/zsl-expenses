@@ -160,3 +160,14 @@ test('gross is rightmost of Gesamt even if VAT column headings are missing',()=>
  assert.equal(r.amountCandidates.some(x=>x.amount===80.67&&x.isTotal),false);
  assert.equal(r.amountCandidates.some(x=>x.amount===16.13&&x.isTotal),false);
 });
+
+test('a repeated paid amount retains both explicit total and card payment evidence',()=>{
+ const r=parseReceiptText('Pitztaler Gletscherbahn\n03.11.2026\nGesamt EUR 615,00\nKreditkarte MasterCard 615,00');
+ const c=r.amountCandidates.find(x=>x.amount===615);
+ assert.equal(c.explicitTotal,true);
+ assert.equal(c.paidLine,true);
+});
+test('receipt date tokens never become monetary candidates, including spaced dates',()=>{
+ const r=parseReceiptText('Pitztaler Gletscherbahn\nDatum: 03.11. 2026 08:36\nVerkaufsbeleg Nr. 27510\nPISTEN GEB');
+ assert.equal(r.amountCandidates.some(x=>x.amount===3.11),false);
+});
