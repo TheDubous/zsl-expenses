@@ -12,7 +12,8 @@ import {mergeRecognizedExpense,isCurrencyConversionPending,requiresCurrencyConve
 import {buildOcrDiagnostic} from './ocr-diagnostics.mjs';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
-import {exportExpenseReadiness,receiptItemLabel,isMotorwayVignette} from './zsl-template-map.mjs';
+import {exportExpenseReadiness,buildTemplatePatches,receiptItemLabel,isMotorwayVignette} from './zsl-template-map.mjs';
+import {suspiciousReceiptGroups} from './export-preflight.mjs';
 import {storeOriginalTemplate,getTemplateInfo,ensureBundledZslTemplate,downloadFilledOriginal} from './zsl-xlsx.js';
 import {downloadAttachmentsPdf} from './attachments-pdf.js';
 import './style.css';
@@ -244,6 +245,7 @@ function App(){
     await run(async()=>{
       await saveExpense({...editing,merchant:String(f.get('merchant')||'').trim(),spent_on:f.get('spentOn')||'',amount:val,category:f.get('category'),payment_method:f.get('method'),zsl_section:f.get('zslSection')==='auto'?'':String(f.get('zslSection')||''),
       conversionConfirmed:requiresCurrencyConversion(editing,active?.currency||'EUR')?(val>0):editing.conversionConfirmed,
+      distinctPurchaseConfirmed:f.get('distinctPurchaseConfirmed')==='on',
       vehicleDetails:String(f.get('vehicleDetails')||'').trim(),itemLabel:String(f.get('itemLabel')||'').trim().slice(0,70),note:String(f.get('note')||''),ocr:editing.ocr?{...editing.ocr,reviewed:true}:undefined});
       setEditing(null);setNotice('Údaje účtenky uložené.');
     })
@@ -290,10 +292,29 @@ function App(){
   }
   async function downloadOriginalWorkbook(allowExisting=false){
     if(!active||busy)return;
+    const duplicates=suspiciousReceiptGroups(expenses);
+    if(duplicates.some(x=>x.strong)){
+      setError('Nalezené výdaje mají stejné číslo originální účtenky. Zkontroluj dvě položky v Náhledu a duplicitní zápis oprav před exportem.');
+      setView('preview');
+      return;
+    }
+    const plan=buildTemplatePatches({event:active,trainer,riders:reportRiders,expenses,funding,
+      variant:templateInfo?.variant||'official'});
+    if(plan.skipped.length||duplicates.length){
+      const examples=duplicates.map(x=>x.label+' '+currency(x.amount,active.currency)+' ('+x.ids.length+'×)').join('; ');
+      const message=[
+        'POZOR: Export nemusí obsahovat všechny výdaje nebo může započítat stejnou účtenku vícekrát.',
+        plan.skipped.length+' výdajů bude vynecháno.',
+        duplicates.length?'Možné duplicity: '+examples:'Žádná podezřelá duplicita.',
+        'Pokud potřebuješ úplné vyúčtování, zvol Zrušit a oprav položky v Náhledu.',
+        'Přesto stáhnout NEÚPLNÝ / neověřený Excel?'
+      ].join('\\n\\n');
+      if(!window.confirm(message)){setView('preview');return;}
+    }
     await run(async()=>{
       const result=await downloadFilledOriginal({event:active,trainer,riders:reportRiders,expenses,funding},{allowExisting});
       const {blob,...audit}=result;setExportAudit(audit);
-      setNotice('Vyplněný původní XLSX stažen: '+result.financialReceiptCount+' z '+result.expectedReceiptCount+' výdajů ('+currency(result.financialAmount,active.currency)+'). Zachováno '+result.integrity.preservedFormulas+' vzorců. Otevři v Microsoft Excelu pro úplný přepočet.');
+      setNotice((result.financialReceiptCount<result.expectedReceiptCount?'POZOR – NEÚPLNÝ EXPORT. ':'')+'Vyplněný původní XLSX stažen: '+result.financialReceiptCount+' z '+result.expectedReceiptCount+' výdajů ('+currency(result.financialAmount,active.currency)+'). Zachováno '+result.integrity.preservedFormulas+' vzorců. Otevři v Microsoft Excelu pro úplný přepočet.');
     });
   }
   async function downloadProofsPdf(){
@@ -559,6 +580,8 @@ function App(){
           <Input label="Položka pro ZSL Excel (stručně)" name="itemLabel" defaultValue={editing.itemLabel||receiptItemLabel(editing)} placeholder="Např. Diesel, AdBlue, Skipas, Startovné"/>
           <p className="muted smalltext">Do tabulky se zapíše datum, tato položka a částka. Název se navrhne z účtenky, ale můžeš jej přepsat.</p>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
+          <label className="input-label"><span>Kontrola případných duplicit</span><span className="checks"><label><input type="checkbox" name="distinctPurchaseConfirmed" defaultChecked={!!editing.distinctPurchaseConfirmed}/> Porovnal/a jsem originály: tento výdaj je samostatný nákup, i když má stejné datum, dodavatele, položku a cenu.</label></span></label>
+          <p className="muted smalltext">Potvrzení samostatného nákupu odstraní pouze upozornění na podobnost. Shodné číslo originální účtenky je stále považováno za podezření na dvojí zápis.</p>
           {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>{editing.ocr.receiptCropDetected&&<p className="muted smalltext">Úzká účtenka byla před čtením automaticky izolována a zvětšena.</p>}
             <p>Automatické čtení může zaměnit dílčí cenu za celkovou částku. Před účetním exportem zkontroluj číslo proti originálu; ruční oprava se při dalším čtení zachová.</p>
             {(editing.ocr.amountConflict||editing.ocr.arithmeticSuggestion)&&<p className="zsl-fx-warning">{editing.ocr.amountConflict?'OCR přečetlo rozdílné celkové částky. ':''}{editing.ocr.arithmeticSuggestion?'Navrhli jsme částku pomocí kontroly součtu položek nebo základu a DPH.':editing.ocr.evidenceSuggestion?'Částka se opakuje ve více čteních, ale jeden průchod uvádí jiný součet. Návrh vyžaduje potvrzení.':'Správnou částku nebylo možné bezpečně určit.'} Ověř navrženou částku proti originálu a potvrď ji tlačítkem „Uložit změny“. Do Excelu ji do té doby nezařadíme.</p>}
