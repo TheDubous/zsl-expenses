@@ -30,7 +30,7 @@ test('two good reads receive an independent footer verification in maximum mode'
  const verified=combineReceiptPasses([
   {kind:'focused',text:'GUTMANN GmbH\n03.11.2026\nDIESEL\nGESAMTBETRAG 127,78 EUR'},
   {kind:'normal',text:'GUTMANN GmbH\n03.11.2026\nDIESEL\nGESAMTBETRAG 127,78 EUR'},
-  {kind:'bottom',text:'GESAMTBETRAG 127,78 EUR'}]);
+  {kind:'bottom',text:'EUROCARD 127,78 EUR'}]);
  assert.equal(isOcrCertain(verified),true);
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['focused','normal','bottom'],result:verified}),null);
 });
