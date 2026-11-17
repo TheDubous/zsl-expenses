@@ -104,3 +104,27 @@ test('tax table alone leaves IMG_8111 visible as unverified candidate',()=>{
  assert.equal(result.totalVerified,false);
  assert.equal(result.confidence,'medium');
 });
+
+test('IMG_8111 chooses reconciled 96.80 over isolated OCR 98.80 but requires confirmation',()=>{
+ const r=combineReceiptPasses([
+  {kind:'totals',text:'Steinblock GmbH\nGesamt: EUR 98,80\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80'},
+  {kind:'normal',text:'Steinblock GmbH\n09.11.2026\nGesamt EUR 98,80\nBezahlt: EFT EUR 96,80'},
+  {kind:'payment',text:'Gesamt: EUR 96,80\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80'}
+ ]);
+ assert.equal(r.amount,96.8);
+ assert.equal(r.amountConflict,true);
+ assert.equal(r.arithmeticSuggestion,true);
+ assert.equal(r.totalVerified,false);
+ assert.equal(r.confidence,'medium');
+ assert.equal(r.amountCandidates[0].amount,96.8);
+ assert.ok(r.amountCandidates.some(x=>x.amount===98.8));
+});
+test('competing reconciled gross totals remain unresolved instead of guessing',()=>{
+ const r=combineReceiptPasses([
+  {kind:'totals',text:'Steinblock\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80'},
+  {kind:'payment',text:'Steinblock\nSt Satz Netto USt Brutto\n1 20,00% 82,67 16,13 98,80'}
+ ]);
+ assert.equal(r.amount,null);
+ assert.equal(r.amountConflict,true);
+ assert.equal(r.arithmeticSuggestion,false);
+});
