@@ -51,3 +51,15 @@ test('verified photo OCR can be approved but manual correction stays untouched',
  assert.equal(newer.amount,650);
  assert.equal(newer.ocr.autoReady,true);
 });
+
+test('a VAT-based 96.80 suggestion is saved for review but never auto-approved',()=>{
+ const saved={amount:0,merchant:'Steinblock GmbH',category:'other',payment_method:'card',ocr:{reviewed:false}};
+ const found={...reading(96.8,'medium'),ocrMode:'max',ocrVerified:false,
+  amountConflict:true,arithmeticSuggestion:true};
+ const newExpense=mergeRecognizedExpense(saved,found,'EUR',{rescan:true});
+ assert.equal(newExpense.amount,96.8);
+ assert.equal(newExpense.ocr.amountConflict,true);
+ assert.equal(newExpense.ocr.arithmeticSuggestion,true);
+ assert.equal(newExpense.ocr.autoReady,false);
+ assert.equal(newExpense.ocr.reviewed,false);
+});
