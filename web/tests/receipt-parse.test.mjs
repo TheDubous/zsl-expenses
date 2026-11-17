@@ -171,3 +171,21 @@ test('receipt date tokens never become monetary candidates, including spaced dat
  const r=parseReceiptText('Pitztaler Gletscherbahn\nDatum: 03.11. 2026 08:36\nVerkaufsbeleg Nr. 27510\nPISTEN GEB');
  assert.equal(r.amountCandidates.some(x=>x.amount===3.11),false);
 });
+
+test('Steinblock IMG_8111 recovers tax gross 96.80 when Gesamt caption is missing',()=>{
+ const t='Steinblock GmbH\n09.11.2026\nMenge Artikel EP Preis St\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80';
+ const result=parseReceiptText(t);
+ assert.equal(result.amount,96.8);
+ assert.equal(result.merchant,'Steinblock GmbH');
+ assert.equal(result.amountCandidates[0].taxRowGross,true);
+ assert.equal(result.amountCandidates.some(c=>c.amount===80.67&&c.explicitTotal),false);
+});
+test('Steinblock IMG_8112 recovers 111.60 from reconciled gross tax table',()=>{
+ const r=parseReceiptText('Steinblock GmbH\n13.11.2026\nSt Satz Netto USt Brutto\n1 20,00% 93,00 18,60 111,60');
+ assert.equal(r.amount,111.6);
+ assert.equal(r.amountCandidates[0].taxRowGross,true);
+});
+test('unreconciled tax table must not promote rightmost price to printed total',()=>{
+ const r=parseReceiptText('Steinblock GmbH\n09.11.2026\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,30');
+ assert.equal(r.amountCandidates.some(c=>c.amount===96.3&&c.explicitTotal),false);
+});
