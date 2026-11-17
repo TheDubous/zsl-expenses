@@ -1,3 +1,4 @@
+import {enhanceFaintInk} from './receipt-ink.mjs';
 import {combineReceiptPasses} from './receipt-consensus.mjs';
 import {findReceiptBand,paperCropRect} from './receipt-crop.mjs';
 import {chooseOcrPass,maxOcrPasses,isOcrCertain} from './ocr-policy.mjs';
@@ -64,6 +65,12 @@ async function createPassImage(image,kind,band){
     soft:'grayscale(100%) contrast(118%) brightness(112%)'
   }[kind]||'none';
   ctx.drawImage(image,base.x,cropY,base.width,cropH,0,0,width,height);
+  // Separate targeted pass on fold-shadowed/faint digits. Preserve normal OCR
+  // passes as independent evidence and keep all work on-device.
+  if(kind==='middle'){
+    const raster=ctx.getImageData(0,0,width,height);
+    ctx.putImageData(enhanceFaintInk(raster,width,height),0,0);
+  }
   try{
     return await new Promise((resolve,reject)=>canvas.toBlob(blob=>
       blob?resolve(blob):reject(new Error('Příprava OCR snímku selhala.')),'image/png'));
@@ -95,7 +102,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
   async function recognizePass(image,kind,band){
     const modes={
       normal:PSM.AUTO,focused:PSM.SINGLE_COLUMN,enhanced:PSM.SINGLE_BLOCK,
-      header:PSM.SPARSE_TEXT,middle:PSM.SINGLE_BLOCK,bottom:PSM.SPARSE_TEXT,soft:PSM.AUTO
+      header:PSM.SPARSE_TEXT,middle:PSM.AUTO,bottom:PSM.SPARSE_TEXT,soft:PSM.AUTO
     };
     await worker.setParameters({
       tessedit_pageseg_mode:modes[kind],
