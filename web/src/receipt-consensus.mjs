@@ -22,8 +22,17 @@ export function combineReceiptPasses(passes){
       item.passNames.push(entry.kind);
     }
   }
+  // A specific store banner (INTERSPAR) is more useful than a generic
+  // overlapping brand (SPAR) when both are recognized across OCR crops.
   const merchants=[...merchantMap.values()].map(x=>({...x,score:x.score+Math.min(12,6*(x.passCount-1))}))
-    .sort((a,b)=>b.score-a.score).slice(0,6);
+    .sort((a,b)=>{
+      const an=compactText(a.name),bn=compactText(b.name);
+      if(a.source==='known-brand'&&b.source==='known-brand'&&an!==bn){
+        if(an.includes(bn)&&a.score>=b.score-20)return -1;
+        if(bn.includes(an)&&b.score>=a.score-20)return 1;
+      }
+      return b.score-a.score;
+    }).slice(0,6);
   const amountMap=new Map();
   for(const entry of whole){
     for(const option of entry.parsed.amountCandidates||[]){
@@ -77,7 +86,7 @@ export function combineReceiptPasses(passes){
   // Another scan similarly yielded 69.20 rather than 96.80.
   // VAT reconciliation is a stronger check than a potentially partial table.
   const vatEvidence=x=>x.grossPassNames.length>0||
-    x.mathEvidence.some(p=>p.kind==='vat-columns'||p.kind==='vat-rate');
+    x.mathEvidence.some(p=>p.kind==='vat-columns'||p.kind==='vat-rate'||p.kind==='vat-aggregate');
   const strongMath=allAmounts.filter(vatEvidence);
   const itemMath=allAmounts.filter(x=>!vatEvidence(x)&&
     x.mathEvidence.some(p=>p.kind==='line-items'));
