@@ -3,6 +3,7 @@ import {FileSpreadsheet,FileText,Upload,Download,AlertCircle,CheckCircle2,Shield
 import {buildTemplatePatches,exportExpenseReadiness,recommendedZslSection,receiptItemLabel,REQUIRED_SHEETS} from './zsl-template-map.mjs';
 import {currency} from './utils.mjs';
 import {originalAmountDisplay} from './receipt-import.mjs';
+import {suspiciousReceiptGroups} from './export-preflight.mjs';
 
 function Message({children,type='warning'}){
  return <div className={'zsl-message '+type}>{type==='warning'?<AlertCircle size={17}/>:<CheckCircle2 size={17}/>}<div>{children}</div></div>;
@@ -21,6 +22,7 @@ export default function SettlementPreview({
  const valid=checks.filter(x=>x.canExport&&plannedIds.has(String(x.expense.id)));
  const readyTotal=valid.reduce((sum,x)=>sum+Math.round(Number(x.expense.amount||0)*100),0)/100;
  const blocked=checks.filter(x=>!plannedIds.has(String(x.expense.id)));
+ const duplicateGroups=suspiciousReceiptGroups(expenses);
  return <div className="stack">
   <div className="panel">
    <div className="heading"><h3><FileSpreadsheet size={20}/> Originální soubor ZSL – Excel</h3></div>
@@ -67,6 +69,15 @@ export default function SettlementPreview({
   <div className="panel">
    <div className="heading"><h3><ClipboardList size={20}/> Zařazení účtenek do původního Excelu</h3></div>
    <p className="muted">Palivo a AdBlue se vždy zařadí do Motorové vozidlo ZSL. U ostatních účtenek můžeš zkontrolovat sekci a krátký název položky. Účtenky bez bankovního potvrzení lze do Excelu zapsat; potvrzení však musíš doplnit před odevzdáním.</p>
+   {duplicateGroups.length>0&&<Message>
+     <strong>Pozor: možné duplicitní výdaje ({duplicateGroups.length} skupin).</strong>
+     {duplicateGroups.map((group,i)=><p key={i}>
+       {group.label} · {group.merchant} · {group.date} · {currency(group.amount,event.currency)}
+       {' · '+group.ids.length+' záznamy. '+group.reason}.
+       {group.strong?' Export je zablokovaný, dokud neodstraníš duplicitní zápis.':' Porovnej oba originály. Pokud jde o dvě skutečně různé platby, v úpravě jednoho dokladu potvrď samostatný nákup.'}
+     </p>)}
+     <p>Automaticky nic nemažeme ani neslučujeme. Zkontroluj oba původní doklady a případně odeber pouze duplicitně nahraný záznam.</p>
+   </Message>}
    <div className="counts">
      <div><strong>{valid.length} / {expenses.length}</strong><span>Výdajů připravených k zápisu</span></div>
      <div><strong>{currency(readyTotal,event.currency)}</strong><span>Očekávaná suma zápisu</span></div>
@@ -104,7 +115,7 @@ export default function SettlementPreview({
      {status.warnings.map((warn,i)=><p className="zsl-preflight-warning" key={i}>Poznámka: {warn}</p>)}
    </div>)}
    </div>
-   {blocked.length>0&&<Message>{blocked.length} výdajů se do Excelu nezapíše, dokud neopravíš uvedené příčiny. Nejde o chybu rozpoznávání částky, ale o chybějící zařazení nebo podklady.</Message>}
+   {blocked.length>0&&<Message><strong>{blocked.length} výdajů nebude součástí Excelu.</strong> Důvod může být nevyřešený konflikt OCR, nezařazená strava, chybějící originál nebo vyčerpaný počet řádků. Oprav stav u konkrétních položek nahoře. Samotné chybějící bankovní potvrzení částku z Excelu neodstraňuje.</Message>}
   </div>
 
   <div className="panel">
