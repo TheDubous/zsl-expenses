@@ -5,7 +5,6 @@ const amountPattern=/(?:\d{1,3}(?:[ .\u00a0]\d{3})+|\d+)[,.]\d{2}(?!\d)/g;
 const BRANDS=[
   ['Pitztaler Gletscherbahn','pitztalergletscherbahn'],
   ['Serways','serways'],
-  ['ITM Handelsgesellschaft mbH','itmhandelsgesellschaft'],
   ['INTERSPAR','interspar'],
   ['Slovnaft','slovnaft'],
   ['Gutmann','gutmann'],
