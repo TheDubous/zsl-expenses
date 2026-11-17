@@ -93,7 +93,10 @@ function moneyCandidates(lines){
     // A tax breakdown often prints 'Gesamt: NETTO  USt  BRUTTO' with three
     // numbers on the next line. Only the rightmost BRUTTO is the paid total.
     const taxHeader=lines.slice(Math.max(0,index-3),index).join(' ');
-    const hasTaxColumns=/netto[\s\S]{0,50}(?:u\s*st|mwst|vat|steuer)[\s\S]{0,50}brutto/i.test(taxHeader);
+    // Slovak VAT receipts print "Sadzby | Základ | DPH | Spolu" rather
+    // than "Netto | USt | Brutto". Without this recognition the tax base
+    // and VAT can be mistaken for two rival grand totals.
+    const hasTaxColumns=/(?:netto[\s\S]{0,50}(?:u\s*st|mwst|vat|steuer)[\s\S]{0,50}brutto|z[aá]klad[\s\S]{0,50}dph[\s\S]{0,50}(?:spolu|suma|celkom)|excl[\s\S]{0,50}(?:mwst|vat|dph)[\s\S]{0,50}incl)/i.test(taxHeader);
     const taxSummary=matches.length>=3&&explicitTotal&&hasTaxColumns;
     // Some scans lose the "Gesamt" caption but still read the printed
     // Netto / USt / Brutto row. Its last 3 numbers must reconcile to cents;
@@ -107,7 +110,10 @@ function moneyCandidates(lines){
     // missing decimal separator. 18,60 is VAT, NOT a new grand total.
     const damagedGrossColumn=summaryColumns&&matches.length>=2&&
       /\s\d{4,6}\s*$/.test(line)&&!/[,.]\d{2}\s*$/.test(line);
-    const selected=damagedGrossColumn?[]:
+    // Even a damaged VAT row should not turn the base/tax components
+    // into candidate payments merely because the column header says "Spolu".
+    const taxColumnsUnreconciled=hasTaxColumns&&matches.length>=3&&!reconcilesTax;
+    const selected=(damagedGrossColumn||taxColumnsUnreconciled)?[]:
       (taxSummary||summaryColumns||taxRowGross)?[matches[matches.length-1]]:matches;
     for(const m of selected){
       const amount=parseNumber(m[0]);
