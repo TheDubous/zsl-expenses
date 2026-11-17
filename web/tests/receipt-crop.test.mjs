@@ -32,3 +32,34 @@ test('avoid cutting receipt if it is extremely thin or at edge',()=>{
  const edge=scene(400,500,{left:0,right:115});
  assert.equal(findReceiptBand(edge),null);
 });
+
+test('long folded receipt still includes right-hand amount column instead of cropping it off',()=>{
+ const img=scene(360,480,{left:90,right:266,paper:[229,232,229],background:[143,102,68]});
+ // Reproduce a shaded fold/text block where columns 170–255 have barely
+ // 44% visible bright paper; old 0.64 requirement cropped to x<170.
+ for(let y=48;y<346;y++)for(let x=170;x<256;x++){
+  if(y%10>=4)continue;
+  const o=(y*img.width+x)*4;
+  img.data[o]=117;img.data[o+1]=117;img.data[o+2]=121;
+ }
+ const band=findReceiptBand(img);
+ assert.ok(band,'a thermal receipt should still be detected');
+ assert.ok(band.x<.27,'the header must stay inside the crop');
+ assert.ok(band.x+band.width>.71,'the right-aligned total must stay inside the crop');
+});
+test('gray and creased vignette receipt can be detected against wooden table',()=>{
+ const img=scene(360,480,{left:90,right:272,paper:[223,224,224],background:[146,103,66]});
+ // Folds and dot-matrix printing leave only about 43% white sampling rows.
+ for(let y=48;y<346;y++)for(let x=90;x<272;x++){
+  if(y%9>=4)continue;
+  const o=(y*img.width+x)*4;
+  img.data[o]=130;img.data[o+1]=129;img.data[o+2]=131;
+ }
+ const band=findReceiptBand(img);
+ assert.ok(band);
+ assert.ok(band.x<.27&&band.x+band.width>.73);
+});
+test('do not crop a low-contrast uniformly light background',()=>{
+ const img=scene(360,480,{left:80,right:280,paper:[232,231,230],background:[224,223,221]});
+ assert.equal(findReceiptBand(img),null,'do not invent a narrow receipt crop on a similarly bright table');
+});
