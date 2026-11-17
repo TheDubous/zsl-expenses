@@ -34,23 +34,25 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
  const primary=band?'focused':'normal';
  const secondary=band?'normal':'enhanced';
  if(mode==='max'){
-  // On phones a second full-page OCR may exhaust the 90s budget before
-  // reaching the totals. Read the shorter central payment area first.
-  if(!done.has(primary))return primary;
+  // Full-page, multi-language OCR is expensive on iPhones. Previously the
+  // first focused pass followed by two upper-middle crops could consume the
+  // entire soft budget before the actual total near the bottom (IMG_8111).
+  // Read the full-width gross/payment area FIRST. No paper-band crop or
+  // aggressive row-normalization is applied to this pass.
+  if(!done.has('totals'))return 'totals';
   if(isOcrCertain(result))return null;
-  if(!done.has('middle'))return 'middle';
-  // A second, uncropped payment-region scan protects right-aligned amounts
-  // from overly aggressive paper isolation and faint-ink normalization.
-  if(!done.has('payment'))return 'payment';
-  const weakAmount=!Number(result?.amount)||result?.confidence!=='high';
+  // Whole image supplies date, merchant and a second independent total read.
+  if(!done.has('normal'))return 'normal';
+  if(isOcrCertain(result))return null;
   const weakHeader=!result?.merchant||result?.merchantConfidence!=='high'||!result?.spent_on;
-  if(weakAmount&&!done.has('bottom'))return 'bottom';
   if(weakHeader&&!done.has('header'))return 'header';
+  // Different contrast and region can recover a damaged digit at the fold.
+  if(!done.has('payment'))return 'payment';
   if(!done.has('bottom'))return 'bottom';
-  if(!done.has(secondary))return secondary;
+  if(band&&!done.has('focused'))return 'focused';
+  if(!done.has('middle'))return 'middle';
   if(!done.has('enhanced'))return 'enhanced';
   if(!done.has('header'))return 'header';
-  if(!done.has('soft'))return 'soft';
   return null;
  }
  // Keep the original faster/precise schedules unchanged.
