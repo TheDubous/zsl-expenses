@@ -264,3 +264,17 @@ test('receipt item label classifies specific products with manual correction as 
  assert.equal(receiptItemLabel({...line('SKIPASS'),itemLabel:'Skipas – 3 dni'}),'Skipas – 3 dni');
  assert.equal(zslReceiptDescription({...line('SKIPASS'),itemLabel:'Startovné'}),'03.11.26 – Startovné');
 });
+
+test('conflicted OCR sum is not written to ZSL XLSX until manually confirmed',()=>{
+ const candidate={...expense('steinblock-conflict',96.8),category:'other',
+  merchant:'Steinblock GmbH',ocr:{reviewed:false,autoReady:false,
+    amountConflict:true,arithmeticSuggestion:true}};
+ assert.equal(exportExpenseReadiness(candidate,event).canExport,false);
+ const unapproved=buildTemplatePatches({event,trainer,expenses:[candidate],variant:'official'});
+ assert.equal(unapproved.patches.some(p=>p.group==='receipt:steinblock-conflict'),false);
+ assert.equal(unapproved.skipped.length,1);
+ const approved={...candidate,ocr:{...candidate.ocr,reviewed:true}};
+ assert.equal(exportExpenseReadiness(approved,event).canExport,true);
+ const final=buildTemplatePatches({event,trainer,expenses:[approved],variant:'official'});
+ assert.ok(final.patches.some(p=>p.group==='receipt:steinblock-conflict'&&p.cell==='F49'&&p.value===96.8));
+});
