@@ -61,6 +61,10 @@ export function combineReceiptPasses(passes){
   const amountConflict=!!(best&&amounts.some(x=>x.amount!==best.amount&&
     hasPrintedEvidence(x)&&(
       x.score>=best.score-8 ||
+      // A payment different from the printed total is a real contradiction
+      // even if the other number appeared in many more OCR passes.
+      (x.paidPassNames.length>0&&best.totalPassNames.length>0) ||
+      (x.totalPassNames.length>0&&best.paidPassNames.length>0) ||
       (x.totalPassNames.length>0&&best.totalPassNames.length>0&&
        x.score>=best.score-16)
     )));
