@@ -103,7 +103,9 @@ function moneyCandidates(lines){
     for(const m of selected){
       const amount=parseNumber(m[0]);
       if(!Number.isFinite(amount)||amount<=0||amount>100000)continue;
-      const isBad=penalized.test(line)||(penalized.test(prev)&&!explicitTotal&&!paidLine);
+      // The Netto/USt/Brutto header is not a discount or a tax-only row;
+      // a reconciled Brutto value on the following line is legitimate.
+      const isBad=penalized.test(line)||(penalized.test(prev)&&!explicitTotal&&!paidLine&&!taxRowGross);
       if(isBad)continue;
       const isTotal=explicitTotal||inheritedTotal||paidLine||taxRowGross;
       const hasCurrency=/(?:\bEUR\b|\bEURO\b|\bCZK\b|\bKČ\b|\bCHF\b|€)/i.test(line);
