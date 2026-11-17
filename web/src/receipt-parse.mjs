@@ -74,7 +74,13 @@ function moneyCandidates(lines){
         if(/[OoIl]/.test(fraction))guessedFraction=true;
         return prefix+fraction.replace(/[Oo]/g,'0').replace(/[Il]/g,'1');
       });
-    const matches=[...line.matchAll(amountPattern)];
+    // Date fragments like "03.11.2026" must not become the price "3,11".
+    // A folded/low-contrast print may put spaces around the separators.
+    const withoutDates=line
+      .replace(/\b\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*(?:20)?\d{2}\b/g,' ')
+      .replace(/\b20\d{2}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{1,2}\b/g,' ');
+    if(!totalLabel(line)&&/^(?:datum|date|uhrzeit|transaktion|transaction|beleg\s*(?:nr)?|rechnungs\s*nr)\b/i.test(line))return;
+    const matches=[...withoutDates.matchAll(amountPattern)];
     if(/\b\d{1,2}\.\d{1,2}\.20\d{2}\b/.test(line)&&!totalLabel(line))return;
     const prev=lines[index-1]||'';
     const explicitTotal=totalLabel(line);
