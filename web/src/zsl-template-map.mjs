@@ -98,8 +98,8 @@ export function exportExpenseReadiness(expense,event){
     'částka v EUR zatím není zadaná – původní cenu z PDF do ZSL nepřepisujeme':'chybí ověřená částka');
   // When the OCR found contradictory printed totals, even a VAT-based
   // suggestion must never enter the financial workbook unreviewed.
-  if(expense.ocr?.amountConflict&&!expense.ocr?.reviewed)
-    issues.push('různé OCR průchody uvádějí jiné celkové částky – potvrď správnou sumu ručně');
+  if((expense.ocr?.amountConflict||expense.ocr?.arithmeticSuggestion)&&!expense.ocr?.reviewed)
+    issues.push('OCR odvodilo nebo zpochybnilo celkovou částku – potvrď ji podle originálu před účetním exportem');
   if(!String(expense.merchant||'').trim())issues.push('chybí dodavatel');
   if(expense.ocr?.reviewed===false&&!expense.ocr?.autoReady)warnings.push('nízká jistota OCR – zkontroluj rozpoznanou částku nebo dodavatele');
   if(expense.payment_method==='card'&&!expense.bank_path)
