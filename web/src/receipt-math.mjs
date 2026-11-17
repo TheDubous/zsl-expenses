@@ -1,7 +1,7 @@
 /** Arithmetic cross-checks from the receipt itself. No vendor-specific prices. */
 const moneyPattern=/(?:\d{1,3}(?:[ .\u00a0]\d{3})+|\d+)[,.]\d{2}(?!\d)/g;
 const parse=v=>Math.round(Number(v.replace(/[\s\u00a0]/g,'').replace(/\./g,'').replace(',','.'))*100);
-const amounts=line=>[...line.matchAll(moneyPattern)].map(m=>parse(m[0]))
+const amounts=line=>[...line.replace(/(\d)\s+([,.])\s*(\d{2})(?!\d)/g,'$1$2$3').matchAll(moneyPattern)].map(m=>parse(m[0]))
   .filter(n=>Number.isFinite(n)&&n>0&&n<=10000000);
 const near=(a,b)=>Math.abs(a-b)<=1;
 
