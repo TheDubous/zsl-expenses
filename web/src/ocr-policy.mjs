@@ -7,7 +7,7 @@
 const CONFIG={
  fast:{maxPasses:2,budgetMs:30000},
  precise:{maxPasses:4,budgetMs:60000},
- max:{maxPasses:5,budgetMs:75000}
+ max:{maxPasses:6,budgetMs:90000}
 };
 export function ocrConfig(mode='max'){
  return CONFIG[mode]||CONFIG.max;
@@ -18,7 +18,7 @@ export function isOcrCertain(result){
  const winner=result.amountCandidates?.find(v=>v.amount===result.amount);
  // A confidently printed single total can still be an OCR typo. Require
  // agreement across genuinely different raster treatments before stopping.
- return !!winner?.isTotal&&new Set(winner?.passNames||[]).size>=2;
+ return !!winner?.isTotal&&new Set(winner?.passNames||[]).size>=3;
 }
 export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elapsedMs=0}={}){
  const done=new Set(passes.map(p=>typeof p==='string'?p:p.kind));
