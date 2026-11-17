@@ -74,7 +74,13 @@ function moneyCandidates(lines){
         if(/[OoIl]/.test(fraction))guessedFraction=true;
         return prefix+fraction.replace(/[Oo]/g,'0').replace(/[Il]/g,'1');
       });
-    const matches=[...line.matchAll(amountPattern)];
+    // Date fragments like "03.11.2026" must not become the price "3,11".
+    // A folded/low-contrast print may put spaces around the separators.
+    const withoutDates=line
+      .replace(/\b\d{1,2}\s*[./-]\s*\d{1,2}\s*[./-]\s*(?:20)?\d{2}\b/g,' ')
+      .replace(/\b20\d{2}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{1,2}\b/g,' ');
+    if(!totalLabel(line)&&/^(?:datum|date|uhrzeit|transaktion|transaction|beleg\s*(?:nr)?|rechnungs\s*nr)\b/i.test(line))return;
+    const matches=[...withoutDates.matchAll(amountPattern)];
     if(/\b\d{1,2}\.\d{1,2}\.20\d{2}\b/.test(line)&&!totalLabel(line))return;
     const prev=lines[index-1]||'';
     const explicitTotal=totalLabel(line);
@@ -175,11 +181,28 @@ export function parseReceiptText(text){
   const lines=source.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
   const amounts=moneyCandidates(lines);
   const merchants=merchantSuggestions(lines);
-  const best=amounts[0]||null;
+  // A single OCR pass can contain BOTH "Gesamt 615,00" and
+  // "Kreditkarte 615,00". Keep evidence from both lines when collapsing
+  // equal monetary values; otherwise payment proof is silently discarded.
+  const grouped=new Map();
+  for(const candidate of amounts){
+    const existing=grouped.get(candidate.amount);
+    if(!existing){
+      grouped.set(candidate.amount,{...candidate});
+    }else{
+      existing.isTotal=!!(existing.isTotal||candidate.isTotal);
+      existing.isPaid=!!(existing.isPaid||candidate.isPaid);
+      existing.explicitTotal=!!(existing.explicitTotal||candidate.explicitTotal);
+      existing.paidLine=!!(existing.paidLine||candidate.paidLine);
+      existing.taxSummary=!!(existing.taxSummary||candidate.taxSummary);
+    }
+  }
+  const uniqueAmounts=[...grouped.values()].sort((a,b)=>b.score-a.score||b.amount-a.amount);
+  const best=uniqueAmounts[0]||null;
   return {
     amount:best?.score>=3?best.amount:null,
     confidence:best?.score>=16?'high':best?.score>=7?'medium':'low',
-    amountCandidates:amounts.filter((v,i,a)=>a.findIndex(z=>z.amount===v.amount)===i).slice(0,8),
+    amountCandidates:uniqueAmounts.slice(0,8),
     merchant:merchants[0]?.score>=22?merchants[0].name:null,
     merchantCandidates:merchants,
     merchantConfidence:merchants[0]?.score>=40?'high':merchants[0]?.score>=27?'medium':'low',

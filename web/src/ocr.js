@@ -39,11 +39,11 @@ async function createPassImage(image,kind,band){
   const base=paperCropRect(originalW,originalH,focused?band:null);
   // Header and footer are targeted separately: scanning the complete tall
   // image five times would be too slow on an iPhone.
-  const region=kind==='header'?[0,.48]:kind==='middle'?[.22,.5]:kind==='bottom'?[.35,.65]:[0,1];
+  const region=kind==='header'?[0,.48]:kind==='middle'?[.22,.5]:kind==='payment'?[.30,.55]:kind==='bottom'?[.35,.65]:[0,1];
   const cropY=Math.floor(originalH*region[0]);
   const cropH=Math.max(1,Math.min(originalH-cropY,Math.floor(originalH*region[1])));
   const maxW=focused?1750:1950;
-  const maxH=kind==='header'?1900:kind==='middle'?2300:kind==='bottom'?2400:3500;
+  const maxH=kind==='header'?1900:kind==='middle'?2300:kind==='payment'?2250:kind==='bottom'?2400:3500;
   const maxPixels=3_600_000;
   const ratio=Math.min(focused?2.8:1.7,maxW/base.width,maxH/cropH,
     Math.sqrt(maxPixels/(base.width*cropH)));
@@ -61,6 +61,7 @@ async function createPassImage(image,kind,band){
     enhanced:'grayscale(100%) contrast(162%)',
     header:'grayscale(100%) contrast(140%)',
     middle:'grayscale(100%) contrast(125%) brightness(105%)',
+    payment:'grayscale(100%) contrast(118%) brightness(106%)',
     bottom:'grayscale(100%) contrast(135%) brightness(104%)',
     soft:'grayscale(100%) contrast(118%) brightness(112%)'
   }[kind]||'none';
@@ -102,7 +103,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
   async function recognizePass(image,kind,band){
     const modes={
       normal:PSM.AUTO,focused:PSM.SINGLE_COLUMN,enhanced:PSM.SINGLE_BLOCK,
-      header:PSM.SPARSE_TEXT,middle:PSM.AUTO,bottom:PSM.SPARSE_TEXT,soft:PSM.AUTO
+      header:PSM.SPARSE_TEXT,middle:PSM.AUTO,payment:PSM.AUTO,bottom:PSM.SPARSE_TEXT,soft:PSM.AUTO
     };
     await worker.setParameters({
       tessedit_pageseg_mode:modes[kind],
@@ -133,7 +134,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
           const labels={
             normal:'celá fotografie',focused:'izolovaná účtenka',
             enhanced:'zesílený tisk',header:'dodavatel v hlavičce',
-            middle:'oblast skutečného součtu',bottom:'celková částka ve spodní části',
+            middle:'oblast skutečného součtu',payment:'kontrola platby bez ořezu papíru',bottom:'celková částka ve spodní části',
             soft:'kontrola slabého tisku'
           };
           onProgress('OCR · '+attempted.length+'/'+limit+' · '+labels[kind]);

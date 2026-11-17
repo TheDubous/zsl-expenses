@@ -18,6 +18,9 @@ import './style.css';
 
 const initial={trainers:[],riders:[],events:[],funding:[],expenses:[]};
 const today=()=>new Date().toISOString().slice(0,10);
+// Older scans did not store verification proof. Reclassify them as needing review,
+// without modifying their amounts or attached receipts.
+const trustedSavedOcr=ocr=>!!ocr?.autoReady&&(!ocr.ocrMode||ocr.ocrVerified===true);
 const autoOCRReady=found=>found?.confidence==='high'&&found?.merchantConfidence==='high'&&
   Number(found.amount)>0&&!!String(found.merchant||'').trim()&&/^\d{4}-\d{2}-\d{2}$/.test(found.spent_on||'');
 
@@ -377,10 +380,10 @@ function App(){
       <div className="heading"><h3>Účtenky</h3><span className="muted">{expenses.length} dokladů</span></div>
       {expenses.length===0&&<Placeholder title="Zatím žádné účtenky" text="Nahraj první doklady, které se pak objeví v tomto seznamu."/>}
       {expenses.map(e=><div className="expense" key={e.id}>
-        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{isCurrencyConversionPending(e,active.currency)?originalAmountDisplay(e):currency(e.amount,active.currency)}</b></div>
+        <div className="expense-top"><div><strong>{receiptItemLabel(e)}</strong><small>{e.merchant||e.receipt_name||'Doklad'} · {showDate(e.spent_on)}</small></div><b>{isCurrencyConversionPending(e,active.currency)?originalAmountDisplay(e):(Number(e.amount)>0?currency(e.amount,active.currency):'Částka neurčena')}</b></div>
         {e.scanError&&<p className="zsl-fx-warning">Přečtení dokladu se nepovedlo: {e.scanError}. Zkus „Přečíst znovu“ nebo uprav údaje ručně.</p>}
         {isCurrencyConversionPending(e,active.currency)&&<p className="zsl-fx-warning">Rozpoznáno {originalAmountDisplay(e)}. Před zápisem do ZSL doplň částku v EUR podle skutečného přepočtu. Do eurových součtů se zatím nezapočítává.</p>}
-        <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed&&!e.ocr.autoReady} ok={!!e.ocr.reviewed||!!e.ocr.autoReady}>{e.ocr.reviewed?'Ručně upraveno':e.ocr.autoReady?'Automaticky načteno':'Zkontrolovat OCR ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
+        <div className="expense-bottom"><Status item={e}/>{e.ocr&&<Pill warn={!e.ocr.reviewed&&!trustedSavedOcr(e.ocr)} ok={!!e.ocr.reviewed||trustedSavedOcr(e.ocr)}>{e.ocr.reviewed?'Ručně upraveno':trustedSavedOcr(e.ocr)?'Automaticky ověřeno':'Zkontrolovat OCR ('+e.ocr.confidence+')'}</Pill>}<span className="muted smalltext">{e.payment_method==='card'?'Karta':e.payment_method==='cash'?'Hotovost':'Neurčeno'}</span></div>
         <div className="expense-actions">
           <Button small secondary onClick={()=>setEditing(e)}>Upravit</Button>
           {e.receipt_path&&<Button small secondary onClick={()=>viewDocument(e.receipt_path)}>Náhled účtenky</Button>}
@@ -546,7 +549,7 @@ function App(){
           <p className="muted smalltext">Do tabulky se zapíše datum, tato položka a částka. Název se navrhne z účtenky, ale můžeš jej přepsat.</p>
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
           {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>{editing.ocr.receiptCropDetected&&<p className="muted smalltext">Úzká účtenka byla před čtením automaticky izolována a zvětšena.</p>}
-            <p>Vysoká jistota OCR nevyžaduje další schvalování. Pokud je částka nebo dodavatel nesprávný, oprav údaj zde. Originální doklad zůstává uložený.</p>
+            <p>Automatické čtení může zaměnit dílčí cenu za celkovou částku. Před účetním exportem zkontroluj číslo proti originálu; ruční oprava se při dalším čtení zachová.</p>
             {(editing.ocr.merchantCandidates||[]).length>0&&<div className="ocr-candidates">
               <span>Možní dodavatelé:</span>
               {editing.ocr.merchantCandidates.slice(0,4).map(c=><button key={c.name} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('merchant');if(inp)inp.value=c.name}}>{c.name}</button>)}

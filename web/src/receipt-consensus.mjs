@@ -27,30 +27,51 @@ export function combineReceiptPasses(passes){
   for(const entry of whole){
     for(const option of entry.parsed.amountCandidates||[]){
       const key=Number(option.amount);
-      if(!Number.isFinite(key))continue;
+      if(!Number.isFinite(key)||key<=0)continue;
       let item=amountMap.get(key);
-      if(!item){item={...option,score:0,passNames:[]};amountMap.set(key,item)}
+      if(!item){
+        item={...option,score:0,passNames:[],totalPassNames:[],paidPassNames:[]};
+        amountMap.set(key,item);
+      }
       item.score=Math.max(item.score,option.score);
       item.isTotal=!!(item.isTotal||option.isTotal);
       item.isPaid=!!(item.isPaid||option.isPaid);
       item.explicitTotal=!!(item.explicitTotal||option.explicitTotal);
-      item.passNames.push(entry.kind);
+      if(!item.passNames.includes(entry.kind))item.passNames.push(entry.kind);
+      if(option.explicitTotal&&!item.totalPassNames.includes(entry.kind))item.totalPassNames.push(entry.kind);
+      if(option.paidLine&&!item.paidPassNames.includes(entry.kind))item.paidPassNames.push(entry.kind);
     }
   }
-  const amounts=[...amountMap.values()].map(x=>({...x,score:x.score+6*(x.passNames.length-1)}))
-    .sort((a,b)=>b.score-a.score||b.amount-a.amount).slice(0,8);
+  const hasPrintedEvidence=x=>!!(x?.totalPassNames?.length||x?.paidPassNames?.length);
+  // Repetition of an item price must never outweigh a clearly labelled grand
+  // total or card/cash payment. OCR passes are NOT independent receipts.
+  const amounts=[...amountMap.values()].map(x=>({
+    ...x,score:x.score+3*(x.passNames.length-1)+
+      9*x.totalPassNames.length+7*x.paidPassNames.length
+  })).sort((a,b)=>
+    Number(hasPrintedEvidence(b))-Number(hasPrintedEvidence(a))||
+    b.score-a.score||b.amount-a.amount).slice(0,8);
   const best=amounts[0]||null;
-  const second=amounts[1]||null;
   const merchant=merchants[0]||null;
-  const merchantConflict=merchants[1]&&merchants[1].score>=merchant.score-4&&compactText(merchants[1].name)!==compactText(merchant.name);
-  const amountConflict=!!(second&&second.amount!==best.amount&&best.isTotal&&second.isTotal&&(
-    second.score>=best.score-3 ||
-    // A separately read footer showing a different printed total is a
-    // substantive disagreement, even if two full-image scans agree.
-    (best.isTotal&&second.isTotal&&second.score>=14&&
-      (best.passNames.includes('bottom')||second.passNames.includes('bottom')))
-  ));
-  const amountConfidence=!best||best.score<7?'low':amountConflict?'low':best.passNames.length>1||best.score>=18?'high':'medium';
+  const merchantConflict=!!(merchant&&merchants[1]&&
+    merchants[1].score>=merchant.score-4&&
+    compactText(merchants[1].name)!==compactText(merchant.name));
+  // Only a competing printed total/payment can create an amount conflict.
+  // Item prices, tax, change and partial reads are not other grand totals.
+  const amountConflict=!!(best&&amounts.some(x=>x.amount!==best.amount&&
+    hasPrintedEvidence(x)&&(
+      x.score>=best.score-8 ||
+      // A payment different from the printed total is a real contradiction
+      // even if the other number appeared in many more OCR passes.
+      (x.paidPassNames.length>0&&best.totalPassNames.length>0) ||
+      (x.totalPassNames.length>0&&best.paidPassNames.length>0) ||
+      (x.totalPassNames.length>0&&best.totalPassNames.length>0&&
+       x.score>=best.score-16)
+    )));
+  const verifiedTotal=!!(best&&best.totalPassNames.length&&best.paidPassNames.length&&
+    new Set([...best.totalPassNames,...best.paidPassNames]).size>=2&&!amountConflict);
+  const amountConfidence=!best||!hasPrintedEvidence(best)||amountConflict?'low':
+    verifiedTotal?'high':'medium';
   const merchantConfidence=!merchant||merchant.score<24?'low':merchantConflict?'low':merchant.score>=47?'high':'medium';
   // If two supplier guesses compete, do not silently select either.
   const topMerchant=merchant&&!merchantConflict&&merchant.score>=24?merchant.name:null;
@@ -59,7 +80,8 @@ export function combineReceiptPasses(passes){
   }
   const rawText=whole.map(x=>x.parsed.rawText).filter(Boolean).join('\n\n--- další průchod OCR ---\n\n').slice(0,16000);
   return {
-    amount:best?.score>=7&&!amountConflict?best.amount:null,
+    amount:best?.score>=7&&hasPrintedEvidence(best)&&!amountConflict?best.amount:null,
+    totalVerified:verifiedTotal,amountConflict,
     amountCandidates:amounts,
     confidence:amountConfidence,
     merchant:topMerchant,merchantCandidates:merchants,merchantConfidence,

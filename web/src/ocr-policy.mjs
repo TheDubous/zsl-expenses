@@ -13,13 +13,16 @@ export function ocrConfig(mode='max'){
  return CONFIG[mode]||CONFIG.max;
 }
 export function isOcrCertain(result){
- if(!result||!Number(result.amount)||Number(result.amount)<=0||!result.merchant||!result.spent_on)return false;
+ if(!result||!result.totalVerified||result.amountConflict||
+    !Number(result.amount)||!result.merchant||!result.spent_on)return false;
  if(result.confidence!=='high'||result.merchantConfidence!=='high')return false;
  const winner=result.amountCandidates?.find(v=>v.amount===result.amount);
- // A confidently printed single total can still be an OCR typo. Require
- // agreement across genuinely different raster treatments before stopping.
- return !!winner?.isTotal&&new Set(winner?.passNames||[]).size>=3;
+ // Different image passes must actually contain supporting total/payment
+ // labels, not merely repeat an item amount across the same photograph.
+ return !!winner?.totalPassNames?.length&&!!winner?.paidPassNames?.length&&
+   new Set([...winner.totalPassNames,...winner.paidPassNames]).size>=2;
 }
+
 export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elapsedMs=0}={}){
  const done=new Set(passes.map(p=>typeof p==='string'?p:p.kind));
  const conf=ocrConfig(mode);
@@ -36,6 +39,9 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
   if(!done.has(primary))return primary;
   if(isOcrCertain(result))return null;
   if(!done.has('middle'))return 'middle';
+  // A second, uncropped payment-region scan protects right-aligned amounts
+  // from overly aggressive paper isolation and faint-ink normalization.
+  if(!done.has('payment'))return 'payment';
   const weakAmount=!Number(result?.amount)||result?.confidence!=='high';
   const weakHeader=!result?.merchant||result?.merchantConfidence!=='high'||!result?.spent_on;
   if(weakAmount&&!done.has('bottom'))return 'bottom';

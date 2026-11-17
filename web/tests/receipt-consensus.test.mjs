@@ -58,3 +58,31 @@ test('tax break-down is not a conflicting printed total when OCR only sees the g
  assert.equal(r.amount,96.8);
  assert.notEqual(r.confidence,'low');
 });
+
+test('IMG_8113 item 613 cannot beat paid grand total 615',()=>{
+ const r=combineReceiptPasses([
+  {kind:'focused',text:'Pitztaler Gletscherbahn\n03.11.2026\nSCT Kind 613,00\nSCT PF+ 2,00'},
+  {kind:'middle',text:'Gesamt EUR 615,00\nKreditkarte MasterCard 615,00'},
+  {kind:'bottom',text:'Gesamt EUR 615,00'}]);
+ assert.equal(r.amount,615);
+ assert.equal(r.totalVerified,true);
+ assert.equal(r.confidence,'high');
+});
+test('repeated item price or date cannot masquerade as verified total',()=>{
+ const r=combineReceiptPasses([
+  {kind:'focused',text:'Pitztaler Gletscherbahn\n03.11.2026\nSCT Kind 613,00'},
+  {kind:'middle',text:'03.11.2026\nSCT Kind 613,00'},
+  {kind:'bottom',text:'03.11.2026\nSCT Kind 613,00'}]);
+ assert.equal(r.amount,null);
+ assert.equal(r.confidence,'low');
+ assert.equal(r.totalVerified,false);
+});
+test('IMG_8114 conflicting 127.18 printed vs 127.78 paid is not silently booked',()=>{
+ const r=combineReceiptPasses([
+  {kind:'focused',text:'GUTMANN\n03.11.2026\nGESAMTBETRAG EUR 127,18'},
+  {kind:'middle',text:'GESAMTBETRAG EUR 127,18'},
+  {kind:'bottom',text:'EUROCARD 127,78 EUR'}]);
+ assert.equal(r.amount,null);
+ assert.equal(r.confidence,'low');
+ assert.equal(r.amountConflict,true);
+});
