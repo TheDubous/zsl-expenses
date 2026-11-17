@@ -8,19 +8,22 @@ const result=()=>combineReceiptPasses([
  {kind:'normal',text:'GUTMANN GmbH\n03.11.2026\nDIESEL\nZAHLUNG GESAMTBETRAG 127,78 EUR'}
 ]);
 const weak={amount:0,confidence:'low',merchant:null,merchantConfidence:'low',spent_on:null};
-test('maximum quality prioritizes original full-width totals and stays within the 90s budget',()=>{
+test('maximum mode reads short price crops before the potentially slow full overview',()=>{
  assert.equal(maxOcrPasses('max'),8);
  assert.equal(ocrConfig('max').budgetMs,90000);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:[]}), 'totals');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],result:weak}),'normal');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal'],result:weak}),'header');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header'],result:weak}),'payment');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment'],result:weak}),'items');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','items'],result:weak}),'tax');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','items','tax'],result:weak}),'bottom');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','items','tax','bottom'],result:weak}),'focused');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','header','payment','items','tax','bottom','focused'],result:weak}),null);
+ const order=['totals','middle','focused','payment','items','tax','normal','header'];
+ for(let i=0;i<order.length;i++){
+  assert.equal(chooseOcrPass({mode:'max',band:true,passes:order.slice(0,i),result:weak}),order[i]);
+ }
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:order,result:weak}),null);
  assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],result:weak,elapsedMs:90000}),null);
+});
+test('IMG8116 must reach price-bearing middle crop even if first totals read misses 650',()=>{
+ const missed={...weak,merchant:'Pitztaler Gletscherbahn',merchantConfidence:'high',
+   spent_on:'2026-11-03'};
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],result:missed}),'middle');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','middle'],result:missed}),'focused');
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','middle','focused'],result:missed}),'payment');
 });
 test('two good reads receive an independent footer verification in maximum mode',()=>{
  const read=result();
@@ -43,12 +46,11 @@ test('single pass and incomplete data never claim maximum certainty',()=>{
    result:{...once,amount:127.78,confidence:'high',merchant:'Slovnaft',merchantConfidence:'high',
      amountCandidates:[{amount:127.78,passNames:['normal']}]} }),'totals');
 });
-test('missing supplier triggers header after total and full-image reads',()=>{
+test('missing supplier still gets a header pass if targeted reads do not find it',()=>{
  const amountGood={amount:50,confidence:'medium',merchant:null,merchantConfidence:'low',spent_on:'2026-11-03'};
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['totals','normal'],result:amountGood}),'header');
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['totals','normal','header'],result:amountGood}),'payment');
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['totals','normal'],result:weak}),'header');
- assert.equal(chooseOcrPass({mode:'max',band:false,passes:['totals','normal','header'],result:weak}),'payment');
+ const done=['totals','middle','payment','items','tax','normal'];
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:done,result:amountGood}),'header');
+ assert.equal(chooseOcrPass({mode:'max',band:false,passes:done.concat('header'),result:amountGood}),'bottom');
 });
 test('fast and precise modes remain available and avoid maximum OCR language overhead',()=>{
  assert.equal(chooseOcrPass({mode:'fast',band:true,passes:[]}), 'normal');
@@ -81,24 +83,15 @@ test('repeated OCR digit error is not accepted before independent amount verific
  assert.equal(checked.confidence,'low');
 });
 
-test('Steinblock IMG8111 sum region cannot be deferred past first slow full-image pass',()=>{
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:[]}), 'totals');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],elapsedMs:45000}), 'normal');
- const one=combineReceiptPasses([{kind:'totals',text:
-  'Gesamt EUR 96,80\nSt Satz Netto USt Brutto\nGesamt: 80,67 16,13 96,80\nEFT EUR 96,80'}]);
- assert.equal(one.amount,96.8);
- assert.equal(one.totalVerified,false);
- assert.equal(one.confidence,'medium');
+test('Steinblock VAT and payment can finish after all short targeted scans',()=>{
  const both=combineReceiptPasses([
-  {kind:'totals',text:'Gesamt EUR 96,80\nGesamt: 80,67 16,13 96,80\nEFT EUR 96,80'},
-  {kind:'normal',text:'Steinblock GmbH\n09.11.2026\nGesamt EUR 96,80\nBezahlt: EFT EUR 96,80'}
+  {kind:'totals',text:'Steinblock GmbH\n09.11.2026\nGesamt EUR 96,80\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80'},
+  {kind:'middle',text:'Gesamt EUR 96,80\nEFT EUR 96,80'}
  ]);
  assert.equal(both.amount,96.8);
  assert.equal(both.totalVerified,true);
- assert.equal(both.spent_on,'2026-11-09');
  assert.equal(isOcrCertain(both),true);
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal'],result:both}),'payment');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','payment'],result:both}),'items');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','payment','items'],result:both}),'tax');
- assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals','normal','payment','items','tax'],result:both}),null);
+ assert.equal(chooseOcrPass({mode:'max',band:true,passes:['totals'],result:both}),'middle');
+ assert.equal(chooseOcrPass({mode:'max',band:true,
+   passes:['totals','middle','focused','payment','items','tax'],result:both}),null);
 });
