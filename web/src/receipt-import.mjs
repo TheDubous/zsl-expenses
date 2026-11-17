@@ -52,6 +52,7 @@ export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan
    confidence:found.confidence,merchantConfidence:found.merchantConfidence,
    ocrVerified:photoEvidenceRequired?found.ocrVerified===true:null,
    amountConflict:!!found.amountConflict,arithmeticSuggestion:!!found.arithmeticSuggestion,
+   evidenceSuggestion:!!found.evidenceSuggestion,
    merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates||[],
    scannedPasses:found.scannedPasses||[],attemptedPasses:found.attemptedPasses||[],
    passDiagnostics:found.passDiagnostics||[],failedPasses:found.failedPasses||[],
