@@ -119,16 +119,17 @@ function moneyCandidates(lines){
     // Even a damaged VAT row should not turn the base/tax components
     // into candidate payments merely because the column header says "Spolu".
     const taxColumnsUnreconciled=hasTaxColumns&&matches.length>=3&&!reconcilesTax;
-    const vatNearby=lines.slice(Math.max(0,index-4),Math.min(lines.length,index+4)).join(' ');
     // In the real Slovnaft scan the line "Spolu 107.59 24 15 : 132 34"
     // lost two decimal separators. Do not promote its surviving base amount
     // to a total just because the line starts with "Spolu".
     const brokenTaxSummary=explicitTotal&&/\b(?:spolu|gesamt)\b/i.test(line)&&
-      /z[aá]klad[\s\S]{0,65}dph[\s\S]{0,65}spolu/i.test(vatNearby)&&
       matches.length<3&&(line.match(/\d+/g)||[]).length>=3;
     const taxClassRow=vat.multiRate&&vatRows.has(index);
+    // Even when OCR loses the Základ/DPH/Spolu column headings, an exact
+    // NET + VAT = GROSS triple contains only ONE possible paid sum: the
+    // rightmost amount. Never promote its tax base using inherited labels.
     const selected=(damagedGrossColumn||taxColumnsUnreconciled||brokenTaxSummary)?[]:
-      (taxSummary||summaryColumns||taxRowGross||taxClassRow)?[matches[matches.length-1]]:matches;
+      (taxSummary||summaryColumns||taxRowGross||taxClassRow||reconcilesTax)?[matches[matches.length-1]]:matches;
     for(const m of selected){
       const amount=parseNumber(m[0]);
       if(!Number.isFinite(amount)||amount<=0||amount>100000)continue;
