@@ -1,5 +1,22 @@
 # ZSL Expenses · Lokální PWA (bez databázového serveru)
 
+## v0.9.4 – OCR oprava čtyř skutečných účtenek (bez zveřejnění fotek)
+
+**Příčina:** automatický detektor světlého termopapíru používal požadavek více než 64 % světlých pixelů v téměř celé výšce sloupce. Na dlouhých účtenkách s přehyby, šedým tiskem a stíny tím dokázal najít pouze levou polovinu papíru a **odříznout pravé částky**. U jiných účtenek papír nerozpoznal vůbec. Na čtyřech lokálně poskytnutých snímcích IMG_8113 až IMG_8116 byl nový ořez numericky ověřen – zahrnuje pravý sloupec i střed účtenky. **Soukromé fotografie nejsou součástí repozitáře ani testovacích dat.**
+
+**Změna OCR:**
+- Nižší adaptivní hranice jasu s povinným kontrastem oproti oběma krajům fotografie, širší bezpečnostní okraj a odmítnutí ořezu bez kontrastního papíru. Pokud se papír nedá bezpečně rozlišit, celá fotografie zůstává k dispozici.
+- Nový cílený OCR průchod **středem účtenky (22–72 % výšky)**, kde bývá skutečný \`Gesamt\`, \`Gesamtbetrag\` nebo \`Bezahlt\`. Celkový počet max. **5 průchodů** a původní měkká časová hranice zůstávají zachovány.
+- Rozpoznávání německých celkových cen \`Gesamt\`, \`Bezahlt\`, \`Zw.-Summe\` a potvrzení kartou. \`Bargeld\` je předaná hotovost, \`Wechselgeld\` vrácené peníze, \`Netto\`, \`MwSt\` a \`Steuer\` daně, nikoliv finální cena.
+- Datum jako \`6 Nov 26\`, prodejce \`Serways\`, typ \`Vignette A10T\` (dálniční známka A10) a \`PISTEN GEB\` (poplatek za trať) jsou podporované.
+- Pro ukončení OCR po dvou průchodech je nutná nejen číselná shoda, ale také rozpoznaná značka **celkové platby**, aby OCR nedůvěřovalo dvěma shodným dílčím cenám.
+
+**Čtyři testovací scénáře podle ručního přepisu veřejně nezveřejněných fotek:** Pitztaler \`SCT Kind + SCT PF+\` **615,00 EUR**, Gutmann \`Diesel\` **127,78 EUR**, Serways \`Vignette A10\` **12,80 EUR** (předáno 13 EUR, vráceno 0,20 EUR), Pitztaler \`Pisten Geb\` **650,00 EUR**. V testech nejsou jména zákazníků, čísla karet ani fotky. Před finálním vyúčtováním je třeba rozpoznanou částku ještě ověřit podle originální účtenky.
+
+Výstup dál doplňuje originální 11-listový Excel ZSL se zachovanými vzorci a formátováním a nepřidává žádné nové účty či schvalovací workflow.
+
+---
+
 ## v0.9.3 – OCR Maximální přesnost (výchozí)
 
 - Po instalaci aktualizace je v záložce **Doklady → Způsob rozpoznávání** automaticky zvolen režim **Maximální přesnost**.
