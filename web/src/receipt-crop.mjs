@@ -13,14 +13,27 @@ export function findReceiptBand({data,width,height}){
       if(Math.min(r,g,b)>157&&Math.max(r,g,b)-Math.min(r,g,b)<70)counts[x]++;
     }
   }
-  // Smooth over 5 pixel columns, so dark printing/lines don't split the paper.
-  const radius=Math.max(2,Math.round(width*.014)),flags=[];
+  // Folds and right-aligned amounts make entire columns darker. Requiring
+  // 64% bright pixels often selected only HALF of a folded receipt, cutting
+  // off exactly the printed amount. Allow lower interior brightness but demand
+  // strong contrast against the outside background before cropping at all.
+  const radius=Math.max(2,Math.round(width*.014)),flags=[],strength=[];
+  const outsideCount=Math.max(1,Math.floor(width*.11));
+  const sideScore=(a,b)=>{
+    let matched=0,sampled=0;
+    for(let x=a;x<b;x++){matched+=counts[x];sampled+=totals[x]}
+    return sampled?matched/sampled:0;
+  };
+  const outside=(sideScore(0,outsideCount)+sideScore(width-outsideCount,width))/2;
+  const threshold=Math.max(.38,outside+.22);
   for(let x=0;x<width;x++){
     let white=0,count=0;
     for(let k=Math.max(0,x-radius);k<=Math.min(width-1,x+radius);k++){
       white+=counts[k];count+=totals[k];
     }
-    flags.push(count>0&&white/count>.64);
+    const ratio=count?white/count:0;
+    strength.push(ratio);
+    flags.push(ratio>threshold);
   }
   const runs=[];let start=null;
   for(let x=0;x<=width;x++){
@@ -34,7 +47,7 @@ export function findReceiptBand({data,width,height}){
   }).sort((a,b)=>(b.b-b.a)-(a.b-a.a));
   if(!candidates.length)return null;
   const band=candidates[0];
-  const margin=Math.round(width*.018);
+  const margin=Math.round(width*.03);
   const left=Math.max(0,band.a-margin),right=Math.min(width-1,band.b+margin);
   return {x:left/width,width:(right-left+1)/width,y:0,height:1};
 }
