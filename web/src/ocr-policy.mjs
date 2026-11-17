@@ -34,29 +34,24 @@ export function chooseOcrPass({mode='max',band=false,passes=[],result=null,elaps
  const primary=band?'focused':'normal';
  const secondary=band?'normal':'enhanced';
  if(mode==='max'){
-  // Never conclude that two agreeing OCR views are independent evidence
-  // until the item and VAT regions have been inspected for contradictions.
-  if(isOcrCertain(result)&&done.has('items')&&done.has('tax'))return null;
-  // Full-page, multi-language OCR is expensive on iPhones. Previously the
-  // first focused pass followed by two upper-middle crops could consume the
-  // entire soft budget before the actual total near the bottom (IMG_8111).
-  // Read the full-width gross/payment area FIRST. No paper-band crop or
-  // aggressive row-normalization is applied to this pass.
+  // Long thermal receipts can make a full-image Tesseract AUTO pass take
+  // >90 s on iOS. Do the compact, price-bearing crops BEFORE that pass.
+  // Pitztal PISTEN GEB 650 was found ONLY by 'middle' in the real scan.
   if(!done.has('totals'))return 'totals';
-  // Whole image supplies date, merchant and a second independent total read.
-  if(!done.has('normal'))return 'normal';
-  if(isOcrCertain(result)&&done.has('items')&&done.has('tax'))return null;
-  const weakHeader=!result?.merchant||result?.merchantConfidence!=='high'||!result?.spent_on;
-  if(weakHeader&&!done.has('header'))return 'header';
-  // Different contrast and region can recover a damaged digit at the fold.
+  if(!done.has('middle'))return 'middle';
+  if(band&&!done.has('focused'))return 'focused';
   if(!done.has('payment'))return 'payment';
   if(!done.has('items'))return 'items';
   if(!done.has('tax'))return 'tax';
+  if(isOcrCertain(result))return null;
+  // Smaller max-mode overview adds header/context without monopolizing the
+  // 90 s soft budget. Fast/precise modes retain their original resolution.
+  if(!done.has('normal'))return 'normal';
+  const weakHeader=!result?.merchant||result?.merchantConfidence!=='high'||!result?.spent_on;
+  if(weakHeader&&!done.has('header'))return 'header';
   if(!done.has('bottom'))return 'bottom';
-  if(band&&!done.has('focused'))return 'focused';
-  if(!done.has('middle'))return 'middle';
-  if(!done.has('enhanced'))return 'enhanced';
   if(!done.has('header'))return 'header';
+  if(!done.has('enhanced'))return 'enhanced';
   return null;
  }
  // Keep the original faster/precise schedules unchanged.
