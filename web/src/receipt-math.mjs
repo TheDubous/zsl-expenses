@@ -1,3 +1,4 @@
+import {analyzeVatTable} from './receipt-vat.mjs';
 /** Arithmetic cross-checks from the receipt itself. No vendor-specific prices. */
 const moneyPattern=/(?:\d{1,3}(?:[ .\u00a0]\d{3})+|\d+)[,.]\d{2}(?!\d)/g;
 const parse=v=>{
@@ -17,18 +18,19 @@ export function receiptMathEvidence(text){
    if(cents>0&&cents<=10000000&&!out.some(x=>x.amount===cents/100&&x.kind===kind))
      out.push({amount:cents/100,kind,line:line.slice(0,180)});
  };
+ // Reconcile tax classes as a group. Treating each tax-rate gross as a
+ // complete paid amount produced three competing "mathematical" amounts on
+ // an INTERSPAR receipt: 3.32, 37.15, 15.37 rather than the paid 55.84.
+ const vat=analyzeVatTable(lines);
+ if(vat.multiRate){
+   if(vat.aggregate!==null)add(vat.aggregate,'vat-aggregate','součet daňových tříd');
+ }else{
+   for(const row of vat.rows)add(row.gross,'vat-columns',lines[row.index]);
+ }
+ // Some fuel tickets print only a tax base, tax and percentage without a
+ // full table header. Verify base x rate equals the printed tax.
  for(let i=0;i<lines.length;i++){
    const line=lines[i],values=amounts(line);
-   const heading=lines.slice(Math.max(0,i-3),i).join(' ');
-   // A line after Netto / USt / Brutto contains 3 separate values.
-   if(values.length>=3&&
-       /(?:netto[\s\S]{0,60}(?:u\s*st|mwst|vat|steuer)[\s\S]{0,60}brutto|z[aá]klad[\s\S]{0,60}dph[\s\S]{0,60}(?:spolu|suma|celkom)|excl[\s\S]{0,60}(?:mwst|vat|dph)[\s\S]{0,60}incl)/i.test(heading)){
-     const [net,tax,gross]=values.slice(-3);
-     if(near(net+tax,gross))add(gross,'vat-columns',line);
-   }
-   // Also handle fuel receipts with only "MWST B 20% VON 106,48 21,30";
-   // frequent OCR misreadings MUST, MIST and MVST are permitted only when
-   // both the VAT base and tax agree with the printed rate.
    if(/\b(?:m[wuvi]st|stb|u\s*st|mehrwertsteuer|steuer|vat|dph)\b/i.test(line)&&
        /\b(?:von|of|z|aus)\b/i.test(line)&&values.length>=2){
      const m=line.match(/(\d{1,2})(?:[,.]00)?\s*%/);
