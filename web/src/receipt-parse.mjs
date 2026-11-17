@@ -84,7 +84,11 @@ function moneyCandidates(lines){
     if(/\b\d{1,2}\.\d{1,2}\.20\d{2}\b/.test(line)&&!totalLabel(line))return;
     const prev=lines[index-1]||'';
     const explicitTotal=totalLabel(line);
-    const paidLine=/\b(?:eft|kreditkarte|eurocard|card\s*payment|kartenzahlung)\b/i.test(line);
+    // "Kreditkarle MasterCard" is common on folded receipts: card network
+    // and printed paid totals are evidence even if Kreditkarte is misspelled.
+    const paymentLabel=/\b(?:eft|kreditkart\w*|kreditkarl\w*|eurocard|mastercard|visa|card\s*payment|kartenzahlung|bezahlt|zaplaten[eé]?|paid)\b/i;
+    const continuedPayment=/^(?:(?:EUR|EURO|€)\s*)?\d[\d\s.,]*(?:\s*(?:EUR|EURO|€))?\s*$/i.test(line)&&matches.length===1;
+    const paidLine=paymentLabel.test(line)||(continuedPayment&&paymentLabel.test(prev));
     const inheritedTotal=totalLabel(prev);
     // A tax breakdown often prints 'Gesamt: NETTO  USt  BRUTTO' with three
     // numbers on the next line. Only the rightmost BRUTTO is the paid total.
@@ -99,7 +103,12 @@ function moneyCandidates(lines){
       Math.abs(Math.round(taxValues[0]*100)+Math.round(taxValues[1]*100)-Math.round(taxValues[2]*100))<=1;
     const taxRowGross=matches.length>=3&&hasTaxColumns&&reconcilesTax;
     const summaryColumns=matches.length>=2&&explicitTotal&&/\b(?:gesamt|total|spolu|suma|celkom)\b/i.test(line);
-    const selected=(taxSummary||summaryColumns||taxRowGross)?[matches[matches.length-1]]:matches;
+    // "Gesamt: 93,00 18,60 11160" has a damaged gross column with
+    // missing decimal separator. 18,60 is VAT, NOT a new grand total.
+    const damagedGrossColumn=summaryColumns&&matches.length>=2&&
+      /\s\d{4,6}\s*$/.test(line)&&!/[,.]\d{2}\s*$/.test(line);
+    const selected=damagedGrossColumn?[]:
+      (taxSummary||summaryColumns||taxRowGross)?[matches[matches.length-1]]:matches;
     for(const m of selected){
       const amount=parseNumber(m[0]);
       if(!Number.isFinite(amount)||amount<=0||amount>100000)continue;
