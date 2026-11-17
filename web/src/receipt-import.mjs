@@ -24,6 +24,10 @@ export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan
  const previousAmount=Number(expense.amount||0);
  const recognizedAmount=Number(found.amount||0);
  const manuallyReviewed=!!(rescan&&expense.ocr?.reviewed);
+ // Native photo OCR must verify printed total and payment independently.
+ // Text-based PDFs keep their existing accounting verification workflow.
+ const photoEvidenceRequired=!!found.ocrMode&&!found.pdfPages;
+ const safeForAuto=!photoEvidenceRequired||found.ocrVerified===true;
  const priorConfirmed=!!(rescan&&expense.conversionConfirmed&&previousAmount>0);
  // The old rescan code always retained a nonzero amount, including an
  // incorrect automatic reading. Trust a new recognized total unless the user
@@ -46,12 +50,13 @@ export function mergeRecognizedExpense(expense,found,eventCurrency='EUR',{rescan
   itemLabel:rescan&&expense.itemLabel?expense.itemLabel:label,
   ocr:{
    confidence:found.confidence,merchantConfidence:found.merchantConfidence,
+   ocrVerified:photoEvidenceRequired?found.ocrVerified===true:null,
    merchantCandidates:found.merchantCandidates||[],amountCandidates:found.amountCandidates||[],
    scannedPasses:found.scannedPasses||[],ocrLanguage:found.ocrLanguage,
    ocrMode:found.ocrMode,receiptCropDetected:!!found.receiptCropDetected,
    pdfPages:found.pdfPages||null,pdfTotalPage:found.pdfTotalPage||null,
    rawText:found.rawText||'',reviewed:manuallyReviewed,
-   autoReady:!manuallyReviewed&&!conversionRequired&&found.confidence==='high'&&found.merchantConfidence==='high'&&
+   autoReady:!manuallyReviewed&&!conversionRequired&&safeForAuto&&found.confidence==='high'&&found.merchantConfidence==='high'&&
     recognizedAmount>0&&!!found.merchant&&!!found.spent_on,
    scannedAt:new Date().toISOString()
   }
