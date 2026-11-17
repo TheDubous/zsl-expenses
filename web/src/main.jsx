@@ -552,6 +552,7 @@ function App(){
           <Input label="Poznámka" name="note" defaultValue={editing.note||''}/>
           {editing.ocr&&<div className="ocr-result"><strong>Automatické čtení · částka: {editing.ocr.confidence||'low'} · dodavatel: {editing.ocr.merchantConfidence||'neurčeno'}</strong>{editing.ocr.receiptCropDetected&&<p className="muted smalltext">Úzká účtenka byla před čtením automaticky izolována a zvětšena.</p>}
             <p>Automatické čtení může zaměnit dílčí cenu za celkovou částku. Před účetním exportem zkontroluj číslo proti originálu; ruční oprava se při dalším čtení zachová.</p>
+            {!!editing.ocr.attemptedPasses?.length&&<p className="muted smalltext">OCR průchody: {editing.ocr.attemptedPasses.join(' → ')} · čas {Math.round(Number(editing.ocr.ocrDurationMs||0)/1000)} s. Tyto údaje pomohou určit, jestli se OCR dostalo ke skutečné částce.</p>}
             {(editing.ocr.merchantCandidates||[]).length>0&&<div className="ocr-candidates">
               <span>Možní dodavatelé:</span>
               {editing.ocr.merchantCandidates.slice(0,4).map(c=><button key={c.name} type="button" onClick={event=>{const inp=event.currentTarget.closest('form')?.elements.namedItem('merchant');if(inp)inp.value=c.name}}>{c.name}</button>)}

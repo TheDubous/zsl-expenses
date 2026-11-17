@@ -36,14 +36,16 @@ function locatePaper(image){
 async function createPassImage(image,kind,band){
   const originalW=image.naturalWidth,originalH=image.naturalHeight;
   const focused=['focused','enhanced','header','middle','bottom','soft'].includes(kind)&&!!band;
+  // The dedicated total crop intentionally uses the full image width:
+  // estimated paper bands sometimes cut off the right-aligned Brutto/EFT.
   const base=paperCropRect(originalW,originalH,focused?band:null);
   // Header and footer are targeted separately: scanning the complete tall
   // image five times would be too slow on an iPhone.
-  const region=kind==='header'?[0,.48]:kind==='middle'?[.22,.5]:kind==='payment'?[.30,.55]:kind==='bottom'?[.35,.65]:[0,1];
+  const region=kind==='totals'?[.44,.41]:kind==='header'?[0,.48]:kind==='middle'?[.22,.5]:kind==='payment'?[.30,.55]:kind==='bottom'?[.35,.65]:[0,1];
   const cropY=Math.floor(originalH*region[0]);
   const cropH=Math.max(1,Math.min(originalH-cropY,Math.floor(originalH*region[1])));
   const maxW=focused?1750:1950;
-  const maxH=kind==='header'?1900:kind==='middle'?2300:kind==='payment'?2250:kind==='bottom'?2400:3500;
+  const maxH=kind==='totals'?2100:kind==='header'?1900:kind==='middle'?2300:kind==='payment'?2250:kind==='bottom'?2400:3500;
   const maxPixels=3_600_000;
   const ratio=Math.min(focused?2.8:1.7,maxW/base.width,maxH/cropH,
     Math.sqrt(maxPixels/(base.width*cropH)));
@@ -57,6 +59,7 @@ async function createPassImage(image,kind,band){
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
   ctx.filter={
     normal:'grayscale(100%) contrast(112%)',
+    totals:'grayscale(100%) contrast(120%)',
     focused:'grayscale(100%) contrast(128%)',
     enhanced:'grayscale(100%) contrast(162%)',
     header:'grayscale(100%) contrast(140%)',
@@ -102,7 +105,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
   let closed=false;
   async function recognizePass(image,kind,band){
     const modes={
-      normal:PSM.AUTO,focused:PSM.SINGLE_COLUMN,enhanced:PSM.SINGLE_BLOCK,
+      normal:PSM.AUTO,totals:PSM.SINGLE_BLOCK,focused:PSM.SINGLE_COLUMN,enhanced:PSM.SINGLE_BLOCK,
       header:PSM.SPARSE_TEXT,middle:PSM.AUTO,payment:PSM.AUTO,bottom:PSM.SPARSE_TEXT,soft:PSM.AUTO
     };
     await worker.setParameters({
@@ -132,7 +135,7 @@ export async function createOCRSession(onProgress=()=>{},{mode='max'}={}){
           if(!kind)break;
           attempted.push(kind);
           const labels={
-            normal:'celá fotografie',focused:'izolovaná účtenka',
+            normal:'celá fotografie',totals:'celková částka a zaplaceno',focused:'izolovaná účtenka',
             enhanced:'zesílený tisk',header:'dodavatel v hlavičce',
             middle:'oblast skutečného součtu',payment:'kontrola platby bez ořezu papíru',bottom:'celková částka ve spodní části',
             soft:'kontrola slabého tisku'
