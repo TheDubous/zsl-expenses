@@ -68,7 +68,7 @@ export default function SettlementPreview({
 
   <div className="panel">
    <div className="heading"><h3><ClipboardList size={20}/> Zařazení účtenek do původního Excelu</h3></div>
-   <p className="muted">Palivo a AdBlue se vždy zařadí do Motorové vozidlo ZSL. U ostatních účtenek můžeš zkontrolovat sekci a krátký název položky. Účtenky bez bankovního potvrzení lze do Excelu zapsat; potvrzení však musíš doplnit před odevzdáním.</p>
+   <p className="muted">Každá rozpoznaná kladná částka se může zapsat do Excelu bez ručního schválení OCR. Pochybné OCR zůstane označené upozorněním. Palivo a AdBlue patří do Motorového vozidla ZSL, u ostatních dokladů zkontroluj zařazení. Bankovní potvrzení lze doplnit před odevzdáním.</p>
    {duplicateGroups.length>0&&<Message>
      <strong>Pozor: možné duplicitní výdaje ({duplicateGroups.length} skupin).</strong>
      {duplicateGroups.map((group,i)=><p key={i}>
@@ -110,12 +110,14 @@ export default function SettlementPreview({
        <button type="button" className="btn secondary small" onClick={()=>onEditExpense(expense)}>Zkontrolovat údaje</button>
      </div>
      {status.canExport&&plannedIds.has(String(expense.id))?
-       <div className="zsl-preflight-status ready"><CheckCircle2 size={16}/> Připravené pro zápis do originálního Excelu</div>:
+       <div className="zsl-preflight-status ready"><CheckCircle2 size={16}/> {expense.ocr?.reviewed===false&&
+         (expense.ocr?.amountConflict||expense.ocr?.arithmeticSuggestion||expense.ocr?.evidenceSuggestion)?
+         'Zahrnout do Excelu – částku OCR zkontroluj podle originálu':'Připravené pro zápis do originálního Excelu'}</div>:
        <div className="zsl-preflight-status blocked"><AlertCircle size={16}/> {status.issues.length?status.issues.join('; '):'Sekce ZSL má vyčerpaný počet řádků. V této šabloně není pro další účtenku místo.'}</div>}
      {status.warnings.map((warn,i)=><p className="zsl-preflight-warning" key={i}>Poznámka: {warn}</p>)}
    </div>)}
    </div>
-   {blocked.length>0&&<Message><strong>{blocked.length} výdajů nebude součástí Excelu.</strong> Důvod může být nevyřešený konflikt OCR, nezařazená strava, chybějící originál nebo vyčerpaný počet řádků. Oprav stav u konkrétních položek nahoře. Samotné chybějící bankovní potvrzení částku z Excelu neodstraňuje.</Message>}
+   {blocked.length>0&&<Message><strong>{blocked.length} výdajů nebude součástí Excelu.</strong> Důvodem může být chybějící částka, nezařazená strava, chybějící originál, nepřevedená cizí měna nebo vyčerpaný počet řádků. Samotná nejistota OCR ani chybějící bankovní potvrzení částku z Excelu neodstraní. Oprav stav u konkrétních položek nahoře.</Message>}
   </div>
 
   <div className="panel">

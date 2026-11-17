@@ -95,11 +95,15 @@ export function exportExpenseReadiness(expense,event){
   if(Number(expense.sourceAmount)>0 && expense.sourceCurrency!=='EUR' && !expense.conversionConfirmed)
     issues.push('PDF je v '+(expense.sourceCurrency||'neznámé měně')+' ('+expense.sourceAmount+'); doplň správnou částku v EUR');
   if(!(Number(expense.amount)>0))issues.push(Number(expense.sourceAmount)>0?
-    'částka v EUR zatím není zadaná – původní cenu z PDF do ZSL nepřepisujeme':'chybí ověřená částka');
-  // When the OCR found contradictory printed totals, even a VAT-based
-  // suggestion must never enter the financial workbook unreviewed.
-  if((expense.ocr?.amountConflict||expense.ocr?.arithmeticSuggestion)&&!expense.ocr?.reviewed)
-    issues.push('OCR odvodilo nebo zpochybnilo celkovou částku – potvrď ji podle originálu před účetním exportem');
+    'částka v EUR zatím není zadaná – původní cenu z PDF do ZSL nepřepisujeme':'částka nebyla nalezena nebo zadána');
+  // A detected amount may be exported without opening the editor just to
+  // mark OCR as reviewed. Keep the uncertainty visible in the preflight and
+  // exported XLSX audit, but do not silently omit a valid positive amount.
+  // A missing amount, receipt, EUR conversion, or required ZSL section
+  // remains blocked by the separate readiness rules.
+  if((expense.ocr?.amountConflict||expense.ocr?.arithmeticSuggestion||
+      expense.ocr?.evidenceSuggestion)&&!expense.ocr?.reviewed)
+    warnings.push('částka převzatá z neověřeného nebo rozporného OCR – před odevzdáním porovnej s originálem');
   if(!String(expense.merchant||'').trim())issues.push('chybí dodavatel');
   if(expense.ocr?.reviewed===false&&!expense.ocr?.autoReady)warnings.push('nízká jistota OCR – zkontroluj rozpoznanou částku nebo dodavatele');
   if(expense.payment_method==='card'&&!expense.bank_path)

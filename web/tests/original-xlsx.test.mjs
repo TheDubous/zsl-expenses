@@ -265,16 +265,27 @@ test('receipt item label classifies specific products with manual correction as 
  assert.equal(zslReceiptDescription({...line('SKIPASS'),itemLabel:'Startovné'}),'03.11.26 – Startovné');
 });
 
-test('conflicted OCR sum is not written to ZSL XLSX until manually confirmed',()=>{
+test('detected positive amount is written to Excel without OCR approval, with visible warning',()=>{
  const candidate={...expense('steinblock-conflict',96.8),category:'other',zsl_section:'',
   merchant:'Steinblock GmbH',ocr:{reviewed:false,autoReady:false,
     amountConflict:true,arithmeticSuggestion:true}};
- assert.equal(exportExpenseReadiness(candidate,event).canExport,false);
- const unapproved=buildTemplatePatches({event,trainer,expenses:[candidate],variant:'official'});
- assert.equal(unapproved.patches.some(p=>p.group==='receipt:steinblock-conflict'),false);
- assert.equal(unapproved.skipped.length,1);
+ const status=exportExpenseReadiness(candidate,event);
+ assert.equal(status.canExport,true);
+ assert.ok(status.warnings.some(x=>/neověřeného nebo rozporného OCR/.test(x)));
+ const automatic=buildTemplatePatches({event,trainer,expenses:[candidate],variant:'official'});
+ assert.equal(automatic.skipped.length,0);
+ assert.ok(automatic.patches.some(p=>p.group==='receipt:steinblock-conflict'&&p.cell==='F49'&&p.value===96.8));
+ assert.ok(automatic.warnings.some(x=>/neověřeného nebo rozporného OCR/.test(x)));
  const approved={...candidate,ocr:{...candidate.ocr,reviewed:true}};
  assert.equal(exportExpenseReadiness(approved,event).canExport,true);
- const final=buildTemplatePatches({event,trainer,expenses:[approved],variant:'official'});
- assert.ok(final.patches.some(p=>p.group==='receipt:steinblock-conflict'&&p.cell==='F49'&&p.value===96.8));
+ assert.ok(!exportExpenseReadiness(approved,event).warnings.some(x=>/neověřeného nebo rozporného OCR/.test(x)));
 });
+test('OCR cannot export a missing, zero or unconverted amount just because suggestions exist',()=>{
+ const sample={...expense('unresolved',0),category:'other',merchant:'Pitztal',ocr:{
+   reviewed:false,amountConflict:true,amountCandidates:[{amount:615},{amount:616}]}};
+ assert.equal(exportExpenseReadiness(sample,event).canExport,false);
+ assert.equal(buildTemplatePatches({event,trainer,expenses:[sample],variant:'official'}).skipped.length,1);
+ const foreign={...sample,amount:1469,sourceCurrency:'CZK',sourceAmount:1469,conversionConfirmed:false};
+ assert.equal(exportExpenseReadiness(foreign,event).canExport,false);
+});
+
