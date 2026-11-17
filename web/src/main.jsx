@@ -11,7 +11,7 @@ import {recognizePdf,isPdf} from './pdf-reader.js';
 import {mergeRecognizedExpense,isCurrencyConversionPending,requiresCurrencyConversion,originalAmountDisplay} from './receipt-import.mjs';
 import {applyRosterChange} from './roster.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
-import {exportExpenseReadiness,receiptItemLabel} from './zsl-template-map.mjs';
+import {exportExpenseReadiness,receiptItemLabel,isMotorwayVignette} from './zsl-template-map.mjs';
 import {storeOriginalTemplate,getTemplateInfo,ensureBundledZslTemplate,downloadFilledOriginal} from './zsl-xlsx.js';
 import {downloadAttachmentsPdf} from './attachments-pdf.js';
 import './style.css';
@@ -224,7 +224,8 @@ function App(){
         setNotice(isCurrencyConversionPending(candidate,active.currency)?
           'PDF přečteno: '+candidate.sourceAmount+' '+candidate.sourceCurrency+
           '. Do ZSL zadej správnou částku v EUR podle bankovního výpisu.':
-          'Doklad přečten znovu. Částka, dodavatel a datum byly doplněny.');
+          Number(found.amount)>0?'Doklad znovu přečten. Zkontroluj rozpoznanou částku proti originálu.':
+          'OCR při tomto čtení nezískalo spolehlivou částku. Originální účtenka zůstává uložená; otevři Upravit a zkontroluj rozpoznaný text.');
       }finally{if(scanner)await scanner.close().catch(()=>{});setOcrProgress('')}
     });
   }
@@ -539,11 +540,12 @@ function App(){
           <Select label="Kategorie" name="category" defaultValue={editing.category}>{CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</Select>
           <Select label="Způsob platby" name="method" defaultValue={editing.payment_method}><option value="unknown">Neurčeno</option><option value="card">Karta – vyžaduje potvrzení</option><option value="cash">Hotovost</option></Select>
           <Select label="Zařazení do originálu ZSL (palivo vždy vozidlo ZSL)" name="zslSection"
-            defaultValue={editing.category==='fuel'?'auto':(editing.zsl_section||'auto')}>
+            defaultValue={isMotorwayVignette(editing)?'other':editing.category==='fuel'?'auto':(editing.zsl_section||'auto')}>
             <option value="auto">Automaticky podle druhu účtenky</option>
             {ZSL_EXPENSE_SECTIONS.filter(section=>!['unassigned','private_car','company_car','zsl_car'].includes(section.id)).map(section=><option key={section.id} value={section.id}>{section.label}</option>)}
             <option value="unassigned">Zatím nezařazeno</option>
           </Select>
+          {isMotorwayVignette(editing)&&<p className="muted smalltext">Dálniční známka se vždy zapíše do „INÉ vedľajšie výdavky“ v originálním Excelu ZSL, i když byla dříve zařazená jako doprava.</p>}
           <Input label="Továrenská značka vozidla, EČV vozidla (pokud se týká paliva)" name="vehicleDetails" defaultValue={editing.vehicleDetails||''} placeholder="Např. Renault Trafic / AA-619RJ"/>
           <Input label="Položka pro ZSL Excel (stručně)" name="itemLabel" defaultValue={editing.itemLabel||receiptItemLabel(editing)} placeholder="Např. Diesel, AdBlue, Skipas, Startovné"/>
           <p className="muted smalltext">Do tabulky se zapíše datum, tato položka a částka. Název se navrhne z účtenky, ale můžeš jej přepsat.</p>
