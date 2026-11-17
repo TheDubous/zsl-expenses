@@ -110,3 +110,27 @@ test('recognized Gesamt EUR and Bezahlt are grand-total indicators even when sep
  const b=parseReceiptText('Serways\n6 Nov 26\nZw.-Summe\n12,80 EUR\nBezahlt\n12,80 EUR\nBargeld 13,00');
  assert.equal(b.amount,12.8);
 });
+
+
+test('IMG_8112 Steinblock: gross 111,60 beats VAT net and item totals',()=>{
+ const t='Steinblock GmbH\\nBundesstrasse 1a\\n6460 Imst\\n13.11.2026 15:12:25\\n6 IM Gruppen Ermäßigte 12,80 76,80\\n1 IM Gruppen Erwachsene 13,80 13,80\\n7 IM Leihschuhe Gruppe 3,00 21,00\\nGesamt: EUR 111,60\\nSt Satz Netto USt Brutto\\n1 20,00% 93,00 18,60 111,60\\nGesamt: 93,00 18,60 111,60\\nBezahlt:\\nEFT EUR 111,60';
+ const got=parseReceiptText(t.replaceAll('\\n','\n'));
+ assert.equal(got.amount,111.60);
+ assert.equal(got.merchant,'Steinblock GmbH');
+ assert.equal(got.spent_on,'2026-11-13');
+ assert.equal(got.payment_method,'unknown');
+ assert.ok(!got.amountCandidates.some(v=>v.amount===93&&v.isTotal),'net amount is not a gross total');
+ assert.ok(!got.amountCandidates.some(v=>v.amount===18.6&&v.isTotal),'VAT is not a gross total');
+});
+test('IMG_8111 Steinblock: rightmost gross value wins even when primary total is unreadable',()=>{
+ const t='Steinblock GmbH\n09.11.2026 14:58:39\n4 502 12,80 51,20\n2 501 13,80 27,60\n6 360210 3,00 18,00\nSt Satz Netto USt Brutto\n1 20,00% 80,67 16,13 96,80\nGesamt: 80,67 16,13 96,80\nBezahlt:\nEFT EUR 96,80';
+ const got=parseReceiptText(t);
+ assert.equal(got.amount,96.8);
+ assert.equal(got.spent_on,'2026-11-09');
+ assert.ok(!got.amountCandidates.some(v=>v.amount===80.67&&v.isTotal));
+});
+test('OCR fractional O and broken spaced total label still read the payment, not tax',()=>{
+ const got=parseReceiptText('GUTMANN GMBH\n03.11.2026\nG E S A M T BETRAG EUR: 127,7O\nSTEUERANTEIL 21,30 EUR\nEUROCARD 127,78');
+ assert.equal(got.amount,127.78);
+ assert.ok(got.amountCandidates[0].isTotal);
+});
