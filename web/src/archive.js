@@ -45,7 +45,10 @@ export function participantCsv(members=[]){
       person.roleLabel,person.isLeader?'ANO':'NE',person.club||'',
       person.birthYear||'',person.contact||'']);
   }
-  return '\ufeff'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n');
+  // Prevent names/notes from being interpreted as spreadsheet formulas when
+  // the roster CSV is opened in Excel. Original data stays untouched.
+  const safe=value=>{const x=String(value??'');return /^[\\s]*[=+@-]/.test(x)?"'"+x:x};
+  return '\ufeff'+rows.map(row=>row.map(value=>csvCell(safe(value))).join(';')).join('\r\n');
 }
 
 export function zslArchiveAuditText(result){
