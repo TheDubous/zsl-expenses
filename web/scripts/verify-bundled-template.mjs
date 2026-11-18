@@ -1,6 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {DOMParser,XMLSerializer} from '@xmldom/xmldom';
 import {inspectZslXlsx,createFilledXlsx} from '../src/zsl-xlsx.js';
+import {buildEventArchive} from '../src/archive.js';
 const bytes=await readFile('web/public/ZSL-Cestovny-prikaz.xlsx');
 const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 const xml={DOMParserCtor:DOMParser,XMLSerializerCtor:XMLSerializer};
@@ -96,3 +97,70 @@ if(result.changes.length<2)throw new Error('Original workbook structure cannot b
 const after=await inspectZslXlsx(result.blob,xml);
 if(after.sheets.length!==info.sheets.length)throw new Error('Writer changed worksheet count.');
 console.log('Original template XLSX writer test succeeded.');
+
+
+// Test the EXACT 11-sheet public source template inside the event ZIP,
+// not just a synthetic sheet fixture. Every original formula's text AND
+// shared formula attributes must remain identical after ZIP export.
+const packed=await buildEventArchive(data.event,data.expenses,data.funding,{
+ trainer:data.trainer,riders:data.riders,templateBlob:blob,xlsxOptions:xml,
+ documentReader:async()=>null
+});
+const packedZip=await JSZip.loadAsync(packed.blob);
+const packedXlsx=packedZip.file(packed.workbookFilename);
+if(!packedXlsx)throw Error('ZIP vyúčtování neobsahuje celý vyplněný originální XLSX.');
+const produced=await JSZip.loadAsync(await packedXlsx.async('uint8array'));
+const pristine=await JSZip.loadAsync(blob);
+let checkedFormulas=0,addedFormulas=0;
+function formulaSnapshot(doc){
+ const formulas=new Map();
+ for(const c of Array.from(doc.getElementsByTagNameNS(xmlNs,'c'))){
+  const f=c.getElementsByTagNameNS(xmlNs,'f')[0];
+  if(!f)continue;
+  const attr=Array.from(f.attributes||[]).map(a=>a.name+'='+a.value).sort().join(';');
+  formulas.set(c.getAttribute('r'),JSON.stringify([f.textContent||'',attr]));
+ }
+ return formulas;
+}
+for(let i=0;i<SHEETS.length;i++){
+ const file='xl/worksheets/sheet'+(i+1)+'.xml';
+ const from=pristine.file(file),to=produced.file(file);
+ if(!from||!to)throw Error('Původní list chybí ve ZIP XLSX: '+file);
+ const baseDoc=new DOMParser().parseFromString(await from.async('string'),'application/xml');
+ const finalDoc=new DOMParser().parseFromString(await to.async('string'),'application/xml');
+ const baseFormula=formulaSnapshot(baseDoc),resultFormula=formulaSnapshot(finalDoc);
+ for(const [cell,text] of baseFormula){
+  if(resultFormula.get(cell)!==text)
+   throw Error('ZIP XLSX změnil původní vzorec '+SHEETS[i]+'!'+cell);
+  checkedFormulas++;
+ }
+ for(const [cell,text] of resultFormula){
+  if(baseFormula.has(cell))continue;
+  if(SHEETS[i]!=='s.4 - stravné zahr.'||!/^L(?:7[4-9]|[89]\d|10[0-7])$/.test(cell))
+    throw Error('Nový nečekaný vzorec v ZSL XLSX: '+SHEETS[i]+'!'+cell);
+  addedFormulas++;
+ }
+}
+if(checkedFormulas!==packed.formulaCount)
+ throw Error('Počet originálních vzorců neodpovídá kontrole při tvorbě XLSX: '+
+   checkedFormulas+' vs '+packed.formulaCount);
+if(checkedFormulas<50)
+ throw Error('Podezřele málo vzorců oficiálního ZSL Excelu: '+checkedFormulas);
+// All non-worksheet parts (styles, relationships, drawings, etc.) must be
+// unmodified and present: the source formula dependencies remain available.
+for(const name of Object.keys(pristine.files)){
+ const source=pristine.file(name),target=produced.file(name);
+ if(!source)continue; // directory
+ if(!target)throw Error('V ZIP XLSX chybí původní součást: '+name);
+ if(name==='xl/workbook.xml'||/^xl\/worksheets\/sheet\d+\.xml$/.test(name))continue;
+ const a=await source.async('uint8array'),b=await target.async('uint8array');
+ if(a.length!==b.length||a.some((value,i)=>value!==b[i]))
+   throw Error('Změněna původní součást XLSX (styly/vazby): '+name);
+}
+const report=await packedZip.file('Kontrola_vzorcu_a_exportu.txt')?.async('string');
+if(!report||!report.includes('Zachované původní vzorce'))
+ throw Error('ZIP postrádá kontrolní soupis zachovaných vzorců.');
+console.log('ZIP XLSX vs verified source template – complete formula comparison:',
+ JSON.stringify({sheets:SHEETS.length,originalFormulasUnchanged:checkedFormulas,
+  missingOrModifiedFormulas:0,allowedForeignMealFormulasAdded:addedFormulas,
+  workbookInsideZip:packed.workbookFilename,financialReceipts:packed.financialReceiptCount}));
