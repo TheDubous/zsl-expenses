@@ -55,7 +55,7 @@ export function zslArchiveAuditText(result){
     ...(result.conflicts.length?['','NEDOSTUPNÉ BUŇKY',...result.conflicts]:[]),
     ...(result.warnings.length?['','UPOZORNĚNÍ',...result.warnings]:[])
   ];
-  return report.join('\\r\\n');
+  return report.join('\r\n');
 }
 
 export async function exportBackup({event=null,trainer=null,riders=[],expenses=[],funding=[]}={}){
@@ -82,7 +82,7 @@ export async function exportBackup({event=null,trainer=null,riders=[],expenses=[
     }catch(error){
       xlsxError=String(error?.message||error);
       zip.file('Vyuctovani_ZSL/EXCEL_SE_NEPODARILO_VYTVORIT.txt',
-        'Obnova všech dat a příloh ze ZIP funguje i bez Excelu.\\r\\nPříčina: '+xlsxError);
+        'Obnova všech dat a příloh ze ZIP funguje i bez Excelu.\r\nPříčina: '+xlsxError);
     }
   }
 
@@ -145,12 +145,12 @@ export async function buildEventArchive(event,expenses,funding,options={}){
       dir.file(f.prefix+'_'+safeFilename(f.name||doc.name),doc.blob);
     }
   }
-  zip.file('Vydaje.csv','\\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\\r\\n'));
-  zip.file('Zaloha_a_pohyby.csv','\\ufeff'+[
+  zip.file('Vydaje.csv','\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n'));
+  zip.file('Zaloha_a_pohyby.csv','\ufeff'+[
     ['Typ','Datum','Castka','Mena','Poznamka'],
     ...funding.map(f=>[f.kind,f.occurredOn||f.occurred_on,f.amount,event.currency,f.note])
-  ].map(r=>r.map(csvCell).join(';')).join('\\r\\n'));
-  zip.file('Kontrola_dokladu.txt',expenses.filter(e=>expenseStatus(e)!=='Doklady kompletní').map(e=>[e.merchant||e.receipt_name,e.amount,expenseStatus(e)].join(' | ')).join('\\r\\n')||'Všechny doklady jsou kompletní.');
+  ].map(r=>r.map(csvCell).join(';')).join('\r\n'));
+  zip.file('Kontrola_dokladu.txt',expenses.filter(e=>expenseStatus(e)!=='Doklady kompletní').map(e=>[e.merchant||e.receipt_name,e.amount,expenseStatus(e)].join(' | ')).join('\r\n')||'Všechny doklady jsou kompletní.');
   const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:1}});
   return {blob,filename:'ZSL_'+safeFilename(event.name)+'_vyuctovani.zip',
     workbookFilename:workbook.filename,financialReceiptCount:workbook.financialReceiptCount,
