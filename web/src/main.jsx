@@ -10,7 +10,7 @@ import {createOCRSession,canRecognize} from './ocr.js';
 import {recognizePdf,isPdf} from './pdf-reader.js';
 import {mergeRecognizedExpense,isCurrencyConversionPending,requiresCurrencyConversion,originalAmountDisplay} from './receipt-import.mjs';
 import {buildOcrDiagnostic} from './ocr-diagnostics.mjs';
-import {applyRosterChange} from './roster.mjs';
+import {resolveEventParticipants,applyTeamChange,TEAM_ROLES} from './event-participants.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
 import {exportExpenseReadiness,buildTemplatePatches,receiptItemLabel,isMotorwayVignette} from './zsl-template-map.mjs';
 import {suspiciousReceiptGroups} from './export-preflight.mjs';
@@ -35,6 +35,38 @@ function Select({label,children,...props}){return <label className="input-label"
 function Pill({children,ok=false,warn=false}){return <span className={'pill '+(ok?'ok':warn?'warn':'')}>{children}</span>}
 function Placeholder({title,text,icon:Icon=Receipt}){return <div className="empty"><Icon size={31}/><strong>{title}</strong><span>{text}</span></div>}
 function Status({item}){const value=expenseStatus(item);return <Pill ok={value==='Doklady kompletní'} warn={value!=='Doklady kompletní'}>{value==='Doklady kompletní'?<CheckCircle2 size={13}/>:<AlertTriangle size={13}/>} {value}</Pill>}
+
+
+function TeamSelection({people=[],assignments=[],leaderId='',primaryId=''}) {
+ const selected=new Map(assignments.map(a=>[a.personId,a.role]));
+ return <div className="team-section">
+   <p className="muted"><strong>Realizační tým</strong> · trenéři, asistenti, servis a doprovod. Vyúčtovatel je účastníkem automaticky; role mohou být na každé akci jiné.</p>
+   <div className="team-choices">
+     {people.map(person=><div className="team-choice" key={person.id}>
+       <label><input type="checkbox" name="staffIds" value={person.id}
+         defaultChecked={selected.has(person.id)}/>{person.name}{person.id===primaryId?' (vyúčtovatel)':''}</label>
+       <select aria-label={'Role osoby '+person.name} name={'staffRole:'+person.id}
+         defaultValue={selected.get(person.id)||'coach'}>
+         {TEAM_ROLES.map(role=><option key={role.id} value={role.id}>{role.label}</option>)}
+       </select>
+     </div>)}
+   </div>
+   <label className="input-label"><span>Vedoucí výjezdu (nezávisle na vyúčtovateli)</span>
+     <select name="tourLeaderId" defaultValue={leaderId}>
+       <option value="">Zatím neurčeno</option>
+       {people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}
+     </select>
+   </label>
+   <p className="muted smalltext">Vedoucí je automaticky zahrnut mezi účastníky, i pokud není zvlášť zaškrtnutý.</p>
+ </div>;
+}
+function extractTeamFields(form,people) {
+ const valid=new Set(people.map(person=>person.id));
+ const staffAssignments=[...new Set(form.getAll('staffIds'))].filter(id=>valid.has(id))
+   .map(personId=>({personId,role:String(form.get('staffRole:'+personId)||'coach')}));
+ const leader=String(form.get('tourLeaderId')||'');
+ return {staffAssignments,tourLeaderId:valid.has(leader)?leader:''};
+}
 
 function App(){
   const [db,setDb]=useState(initial);
@@ -76,6 +108,7 @@ function App(){
   const trainer=db.trainers.find(x=>x.id===active?.trainerId);
   const participants=active?.riderIds?.map(id=>db.riders.find(r=>r.id===id)?.name).filter(Boolean)||[];
   const reportRiders=useMemo(()=>db.riders.filter(r=>(active?.riderIds||[]).includes(r.id)),[db.riders,active?.riderIds]);
+  const teamMembers=useMemo(()=>resolveEventParticipants(active||{},db.trainers,db.riders),[active,db.trainers,db.riders]);
   const zslReport=useMemo(()=>active?makeZslReport({event:active,trainer,riders:reportRiders,expenses,funding}):null,[active,trainer,reportRiders,expenses,funding]);
 
   async function run(action){
@@ -106,7 +139,9 @@ function App(){
   async function addRider(e){
     e.preventDefault();const form=e.currentTarget;const f=new FormData(form),name=String(f.get('rider')||'').trim();
     if(!name)return;
-    await run(async()=>{await putOne('riders',{id:uid(),name,createdAt:new Date().toISOString()});form.reset();setNotice('Jezdec přidán.')})
+    await run(async()=>{await putOne('riders',{id:uid(),name,club:String(f.get('club')||'').trim(),
+      birthYear:String(f.get('birthYear')||'').trim(),notes:String(f.get('notes')||'').trim(),
+      createdAt:new Date().toISOString()});form.reset();setNotice('Sportovec přidán.')})
   }
   async function createEvent(e){
     e.preventDefault();const f=new FormData(e.currentTarget),name=String(f.get('name')||'').trim(),advance=decimal(f.get('advance'));
@@ -114,7 +149,7 @@ function App(){
     if(f.get('start')&&f.get('end')&&f.get('end')<f.get('start')){setError('Datum konce nemůže být před začátkem.');return}
     await run(async()=>{
       const idEvent=uid();
-      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
+      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],...extractTeamFields(f,db.trainers),teamChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
         defaultFuelSection:'zsl_car',
         vehicleDetails:String(f.get('vehicleDetails')||'').trim(),startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),advanceNumber:String(f.get('advanceNumber')||''),reportText:String(f.get('reportText')||''),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
       if(advance>0)await putOne('funding',{id:uid(),eventId:idEvent,kind:'advance',amount:advance,occurredOn:today(),note:'Počáteční záloha',createdAt:new Date().toISOString()});
@@ -125,17 +160,20 @@ function App(){
     e.preventDefault();if(!active)return;
     const f=new FormData(e.currentTarget),next=f.getAll('riders');
     await run(async()=>{
-      await putOne('events',applyRosterChange(active,next,new Date().toISOString(),String(f.get('rosterReason')||'').trim()));
-      setNotice('Soupiska byla aktualizována; odjezdy a návraty jsou uložené v historii.');
+      await putOne('events',applyTeamChange(active,{riderIds:next,
+        ...extractTeamFields(f,db.trainers)},new Date().toISOString(),String(f.get('rosterReason')||'').trim()));
+      setNotice('Účastníci, role týmu a vedoucí výjezdu byli uloženi.');
     });
   }
   async function renameRider(e){
     e.preventDefault();
     if(!editingRider)return;
-    const form=e.currentTarget,name=String(new FormData(form).get('riderName')||'').trim();
+    const form=e.currentTarget,f=new FormData(form),name=String(f.get('riderName')||'').trim();
     if(!name){setError('Jméno jezdce nesmí být prázdné.');return}
     if(db.riders.some(r=>r.id!==editingRider.id&&r.name.toLowerCase()===name.toLowerCase())){setError('Jezdec s tímto jménem už je uložený.');return}
-    await run(async()=>{await putOne('riders',{...editingRider,name});setEditingRider(null);setNotice('Jméno jezdce upraveno ve všech soustředěních a závodech.');});
+    await run(async()=>{await putOne('riders',{...editingRider,name,club:String(f.get('club')||'').trim(),
+      birthYear:String(f.get('birthYear')||'').trim(),notes:String(f.get('notes')||'').trim()});
+      setEditingRider(null);setNotice('Profil sportovce upraven ve všech akcích.');});
   }
   async function toggleRiderActive(rider){
     await run(async()=>{
