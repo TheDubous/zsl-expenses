@@ -102,7 +102,8 @@ test('a partial export with no eligible expenses still includes an editable ZSL 
  const pending={...fuel,id:'unassigned',amount:0,receipt_path:'r1'};
  const out=await buildEventArchive(event,[pending],[],options(source));
  assert.equal(out.financialReceiptCount,0);
- assert.equal(out.skipped.length,1);
+ assert.ok(out.skipped.some(x=>/částka nebyla nalezena/.test(x)));
+ assert.ok(out.skipped.length>=1);
  const zip=await JSZip.loadAsync(out.blob);
  assert.ok(zip.file(out.workbookFilename));
  assert.match(await zip.file('Kontrola_vzorcu_a_exportu.txt').async('string'),/NEZAPSANÉ ÚČTENKY/);
