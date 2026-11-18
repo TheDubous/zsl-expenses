@@ -94,3 +94,10 @@ test('complete participant CSV includes more people than the unchanged ZSL print
  assert.match(csv,/Jméno a příjmení/);
  assert.equal(csv.trim().split('\r\n').length,26);
 });
+
+test('roster CSV neutralizes formula-like participant names without deleting the name',()=>{
+ const csv=participantCsv([{name:'=IMPORTXML("bad")',kind:'athlete',
+   roleLabel:'Športovec',club:'Club',isLeader:false}]);
+ assert.ok(csv.includes("'=IMPORTXML"));
+ assert.ok(!csv.includes(';"=IMPORTXML'));
+});
