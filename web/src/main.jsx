@@ -106,7 +106,6 @@ function App(){
   const funding=useMemo(()=>db.funding.filter(x=>x.eventId===active?.id).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),[db.funding,active?.id]);
   const summary=useMemo(()=>summarize(expenses,funding),[expenses,funding]);
   const trainer=db.trainers.find(x=>x.id===active?.trainerId);
-  const participants=active?.riderIds?.map(id=>db.riders.find(r=>r.id===id)?.name).filter(Boolean)||[];
   const reportRiders=useMemo(()=>db.riders.filter(r=>(active?.riderIds||[]).includes(r.id)),[db.riders,active?.riderIds]);
   const teamMembers=useMemo(()=>resolveEventParticipants(active||{},db.trainers,db.riders),[active,db.trainers,db.riders]);
   const zslReport=useMemo(()=>active?makeZslReport({event:active,trainer,riders:reportRiders,expenses,funding}):null,[active,trainer,reportRiders,expenses,funding]);
@@ -480,7 +479,7 @@ function App(){
           <Button small secondary danger onClick={()=>removeExpense(e)}><Trash2 size={14}/></Button>
         </div>
       </div>)}
-      <Button onClick={doExport} disabled={busy||expenses.length===0}><FolderArchive size={17}/> ZIP tohoto vyúčtování</Button>
+      <Button onClick={doExport} disabled={busy||!active}><FolderArchive size={17}/> ZIP tohoto vyúčtování</Button>
       <p className="muted smalltext">ZIP tohoto vyúčtování obsahuje <strong>celý vyplněný originální Excel ZSL (.xlsx) se všemi původními listy a vzorci</strong>, původní účtenky, bankovní potvrzení, CSV a textovou kontrolu vzorců. V Excelu můžeš po stažení doplnit další údaje. Pro úplné přepočítání vzorců otevři XLSX v Microsoft Excelu.</p>
     </div>;
   }
