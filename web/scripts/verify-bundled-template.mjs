@@ -122,7 +122,7 @@ function formulaSnapshot(doc){
  }
  return formulas;
 }
-for(let i=0;i<SHEETS.length;i++){
+for(let i=0;i<info.sheets.length;i++){
  const file='xl/worksheets/sheet'+(i+1)+'.xml';
  const from=pristine.file(file),to=produced.file(file);
  if(!from||!to)throw Error('Původní list chybí ve ZIP XLSX: '+file);
@@ -131,13 +131,13 @@ for(let i=0;i<SHEETS.length;i++){
  const baseFormula=formulaSnapshot(baseDoc),resultFormula=formulaSnapshot(finalDoc);
  for(const [cell,text] of baseFormula){
   if(resultFormula.get(cell)!==text)
-   throw Error('ZIP XLSX změnil původní vzorec '+SHEETS[i]+'!'+cell);
+   throw Error('ZIP XLSX změnil původní vzorec '+info.sheets[i]+'!'+cell);
   checkedFormulas++;
  }
  for(const [cell,text] of resultFormula){
   if(baseFormula.has(cell))continue;
-  if(SHEETS[i]!=='s.4 - stravné zahr.'||!/^L(?:7[4-9]|[89]\d|10[0-7])$/.test(cell))
-    throw Error('Nový nečekaný vzorec v ZSL XLSX: '+SHEETS[i]+'!'+cell);
+  if(info.sheets[i]!=='s.4 - stravné zahr.'||!/^L(?:7[4-9]|[89]\d|10[0-7])$/.test(cell))
+    throw Error('Nový nečekaný vzorec v ZSL XLSX: '+info.sheets[i]+'!'+cell);
   addedFormulas++;
  }
 }
@@ -161,6 +161,6 @@ const report=await packedZip.file('Kontrola_vzorcu_a_exportu.txt')?.async('strin
 if(!report||!report.includes('Zachované původní vzorce'))
  throw Error('ZIP postrádá kontrolní soupis zachovaných vzorců.');
 console.log('ZIP XLSX vs verified source template – complete formula comparison:',
- JSON.stringify({sheets:SHEETS.length,originalFormulasUnchanged:checkedFormulas,
+ JSON.stringify({sheets:info.sheets.length,originalFormulasUnchanged:checkedFormulas,
   missingOrModifiedFormulas:0,allowedForeignMealFormulasAdded:addedFormulas,
   workbookInsideZip:packed.workbookFilename,financialReceipts:packed.financialReceiptCount}));
