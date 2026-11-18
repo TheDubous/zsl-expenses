@@ -538,6 +538,16 @@ function App(){
         {(active.rosterChanges||[]).length>0&&<details className="roster-history"><summary>Historie změn soupisky ({active.rosterChanges.length})</summary>
           <div>{[...active.rosterChanges].reverse().map((x,i)=><p key={i}><strong>{db.riders.find(r=>r.id===x.riderId)?.name||'Jezdec'}</strong> · {x.action==='joined'?'přidán':'vyřazen'} · {new Date(x.at).toLocaleString('cs-CZ')}{x.reason&&' · '+x.reason}</p>)}</div>
         </details>}
+        {(active.teamChanges||[]).length>0&&<details className="roster-history"><summary>Historie realizačního týmu a vedoucího ({active.teamChanges.length})</summary>
+          <div>{[...active.teamChanges].reverse().map((change,i)=><p key={i}>
+            <strong>{change.action==='leader_changed'?'Vedoucí výjezdu':db.trainers.find(person=>person.id===change.personId)?.name||'Člen týmu'}</strong>
+            {' · '+(change.action==='leader_changed'?(db.trainers.find(person=>person.id===change.personId)?.name||'neurčen'):
+              change.action==='joined'?'přidán':
+              change.action==='left'?'odebrán':
+              'změněna role na '+(TEAM_ROLES.find(role=>role.id===change.role)?.label||'další roli'))}
+            {' · '+new Date(change.at).toLocaleString('cs-CZ')}{change.reason&&' · '+change.reason}
+          </p>)}</div>
+        </details>}
       </div>}
     </div>;
   }
