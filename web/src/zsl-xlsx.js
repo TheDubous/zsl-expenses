@@ -175,7 +175,7 @@ function getRowGroup(patches){
  }
  return groups;
 }
-export async function createFilledXlsx(blob,{event,trainer,riders,expenses,funding},options={}){
+export async function createFilledXlsx(blob,{event,trainer,riders,members=[],expenses,funding},options={}){
  const inspected=await inspectZslXlsx(blob,options);
  if(inspected.hasExistingTrip&&!options.allowExisting){
   throw new Error('Vybraný XLSX už obsahuje termíny nebo výdaje předchozí cesty ('+inspected.existing.length+' polí). Aby se částky různých akcí nesmíchaly, zvol čistou šablonu ZSL. Pokud chceš vědomě DOPLNIT stejný rozpracovaný výkaz, potvrď to v záložce Náhled.');
@@ -184,7 +184,7 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
  const {sheets,book}=await readWorkbook(zip,options);
  const Parser=options.DOMParserCtor||globalThis.DOMParser;
  const Serializer=options.XMLSerializerCtor||globalThis.XMLSerializer;
- const {patches,warnings,skipped}=buildTemplatePatches({event,trainer,riders,expenses,funding,variant:inspected.variant});
+ const {patches,warnings,skipped}=buildTemplatePatches({event,trainer,riders,members,expenses,funding,variant:inspected.variant});
  const grouped=getRowGroup(patches);
  const changes=[],conflicts=[];
  const touched=new Map();
