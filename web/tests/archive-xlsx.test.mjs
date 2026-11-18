@@ -37,7 +37,7 @@ async function sampleTemplate(){
  for(let i=0;i<names.length;i++){
   const name=names[i];
   const cells=name==='s.1 - pokyn'?
-   [['B12',''],['B4',''],['I32','<f>SUM(\\'s.3 - výdavky\\'!H3:I3)</f><v>0</v>']]:
+   [['B12',''],['B4',''],['I32',"<f>SUM('s.3 - výdavky'!H3:I3)</f><v>0</v>"]]:
    name==='s.3 - výdavky'?
    [['C26',''],['F26',''],['H26',''],['C49',''],['F49',''],['H49',''],
     ['H3','<f>H26</f><v>0</v>']]:
