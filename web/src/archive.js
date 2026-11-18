@@ -76,7 +76,7 @@ export async function exportBackup({event=null,trainer=null,riders=[],expenses=[
   if(event){
     try{
       const result=await prepareZslWorkbookForArchive({event,trainer,riders,expenses,funding});
-      zip.file('Vyuctovani_ZSL/'+result.filename,result.blob);
+      zip.file('Vyuctovani_ZSL/'+result.filename,new Uint8Array(await result.blob.arrayBuffer()));
       zip.file('Vyuctovani_ZSL/Kontrola_vzorcu_a_exportu.txt',zslArchiveAuditText(result));
       xlsxIncluded=true;
     }catch(error){
@@ -128,7 +128,7 @@ export async function buildEventArchive(event,expenses,funding,options={}){
   const workbook=await prepareZslWorkbookForArchive({event,trainer,riders,expenses,funding},
     {templateBlob,xlsxOptions});
   const zip=new JSZip(),folder=zip.folder('Doklady');
-  zip.file(workbook.filename,workbook.blob);
+  zip.file(workbook.filename,new Uint8Array(await workbook.blob.arrayBuffer()));
   zip.file('Kontrola_vzorcu_a_exportu.txt',zslArchiveAuditText(workbook));
   const rows=[['ID','Datum','Polozka','Dodavatel','Castka pro ZSL','Mena ZSL','Puvodni castka','Puvodni mena','Prepocteno do EUR','Kategorie','Sekce ZSL podle s.3','Vozidlo / ECV','Zpusob platby','Doklady']];
   for(const [index,e] of expenses.entries()){
@@ -142,7 +142,7 @@ export async function buildEventArchive(event,expenses,funding,options={}){
       if(!f.id)continue;
       const doc=await documentReader('documents',f.id);
       if(!doc||!doc.blob){dir.file('CHYBI_PRILOHA_'+f.prefix+'.txt','Soubor chybí v lokální databázi.');continue}
-      dir.file(f.prefix+'_'+safeFilename(f.name||doc.name),doc.blob);
+      dir.file(f.prefix+'_'+safeFilename(f.name||doc.name),new Uint8Array(await doc.blob.arrayBuffer()));
     }
   }
   zip.file('Vydaje.csv','\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n'));
