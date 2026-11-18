@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import {safeFilename,csvCell,expenseStatus,CATEGORIES} from './utils.mjs';
 import {snapshot,getOne,restoreAll} from './localdb.js';
 import {expenseSection,ZSL_EXPENSE_SECTIONS} from './zsl-report.mjs';
-import {receiptItemLabel} from './zsl-template-map.mjs';
+import {receiptItemLabel,TEMPLATE_ID} from './zsl-template-map.mjs';
 
 const TABLES=['trainers','riders','events','funding','expenses'];
 const FORMAT='zsl-expenses-local-backup',VERSION=1;
@@ -13,7 +13,52 @@ export function downloadBlob(blob,name){
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
-export async function exportBackup(){
+/**
+ * Build the REAL, fully editable ZSL XLSX in memory for a ZIP export.
+ * Uses the same audited XLSX writer as the standalone export, not a CSV
+ * reconstruction. No private receipt is uploaded, and no data is mutated.
+ */
+export async function prepareZslWorkbookForArchive({event,trainer,riders=[],expenses=[],funding=[]},
+  {templateBlob=null,xlsxOptions={}}={}){
+  if(!event)throw new Error('Nejdřív vyber akci, pro kterou chceš vytvořit Excel.');
+  // Dynamic import avoids a module initialization cycle: zsl-xlsx imports
+  // downloadBlob from this file for the standalone XLSX download.
+  const {createFilledXlsx,ensureBundledZslTemplate}=await import('./zsl-xlsx.js');
+  let source=templateBlob;
+  if(!source){
+    let doc=await getOne('documents',TEMPLATE_ID);
+    if(!doc?.blob){
+      await ensureBundledZslTemplate();
+      doc=await getOne('documents',TEMPLATE_ID);
+    }
+    source=doc?.blob;
+  }
+  if(!source)throw new Error('Nelze přidat Excel do ZIP: původní ZSL šablona není uložená. Otevři Náhled a načti oficiální šablonu.');
+  return createFilledXlsx(source,{event,trainer,riders,expenses,funding},
+    {...xlsxOptions,allowZeroFinancial:true});
+}
+export function zslArchiveAuditText(result){
+  const report=[
+    'ZSL Expenses – kontrola originálního Excelu',
+    'Soubor XLSX: '+result.filename,
+    'Původní listy: '+result.integrity.sheets,
+    'Zachované původní vzorce (včetně textu a atributů): '+result.integrity.preservedFormulas,
+    'Zachované formátované buňky: '+result.integrity.preservedStyles,
+    'Nově doplněné vzorce stravného: '+(result.integrity.addedForeignMealFormulas.join(', ')||'žádné'),
+    'Zapsané účtenky: '+result.financialReceiptCount+' / '+result.expectedReceiptCount,
+    'Zapsaná částka v EUR: '+Number(result.financialAmount).toFixed(2),
+    'Původní vzorce jsou zachované, jejich celkový přepočet se provede po otevření v Microsoft Excelu.',
+    'Rychlý náhled iPhonu nemusí přepočítat složité vzorce a může ukazovat zastaralé výsledky.',
+    '',
+    'NEZAPSANÉ ÚČTENKY A OMEZENÍ',
+    ...(result.skipped.length?result.skipped:['Žádné nezapsané účtenky.']),
+    ...(result.conflicts.length?['','NEDOSTUPNÉ BUŇKY',...result.conflicts]:[]),
+    ...(result.warnings.length?['','UPOZORNĚNÍ',...result.warnings]:[])
+  ];
+  return report.join('\r\n');
+}
+
+export async function exportBackup({event=null,trainer=null,riders=[],expenses=[],funding=[]}={}){
   const contents=await snapshot();
   const zip=new JSZip();
   const documents=[];
@@ -25,10 +70,26 @@ export async function exportBackup(){
   }
   const data=Object.fromEntries(TABLES.map(t=>[t,contents[t]]));
   zip.file('manifest.json',JSON.stringify({format:FORMAT,version:VERSION,createdAt:new Date().toISOString(),data,documents},null,2));
+  // Keep the complete restorable backup independent of Excel readiness.
+  // A failed XLSX build must never prevent recovery of receipts and data.
+  let xlsxIncluded=false,xlsxError=null;
+  if(event){
+    try{
+      const result=await prepareZslWorkbookForArchive({event,trainer,riders,expenses,funding});
+      zip.file('Vyuctovani_ZSL/'+result.filename,new Uint8Array(await result.blob.arrayBuffer()));
+      zip.file('Vyuctovani_ZSL/Kontrola_vzorcu_a_exportu.txt',zslArchiveAuditText(result));
+      xlsxIncluded=true;
+    }catch(error){
+      xlsxError=String(error?.message||error);
+      zip.file('Vyuctovani_ZSL/EXCEL_SE_NEPODARILO_VYTVORIT.txt',
+        'Obnova všech dat a příloh ze ZIP funguje i bez Excelu.\r\nPříčina: '+xlsxError);
+    }
+  }
+
   const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:1}});
   const timestamp=new Date().toISOString().slice(0,10);
   downloadBlob(blob,'ZSL_Expenses_KOMPLETNI_ZALOHA_'+timestamp+'.zip');
-  return {events:contents.events.length,expenses:contents.expenses.length,documents:contents.documents.length};
+  return {events:contents.events.length,expenses:contents.expenses.length,documents:contents.documents.length,xlsxIncluded,xlsxError};
 }
 export async function importBackup(file){
   if(!file||!/\.zip$/i.test(file.name))throw new Error('Vyber ZIP vytvořený funkcí Kompletní záloha.');
@@ -58,8 +119,17 @@ export async function importBackup(file){
   await restoreAll(restored);
   return {events:restored.events.length,expenses:restored.expenses.length,documents:restored.documents.length};
 }
-export async function exportEvent(event,expenses,funding){
+/**
+ * Construct the event archive without downloading. Testable in Node and iOS.
+ * The ZIP contains a full original-format XLSX beside the receipts/CSVs.
+ */
+export async function buildEventArchive(event,expenses,funding,options={}){
+  const {trainer=null,riders=[],templateBlob=null,xlsxOptions={},documentReader=getOne}=options;
+  const workbook=await prepareZslWorkbookForArchive({event,trainer,riders,expenses,funding},
+    {templateBlob,xlsxOptions});
   const zip=new JSZip(),folder=zip.folder('Doklady');
+  zip.file(workbook.filename,new Uint8Array(await workbook.blob.arrayBuffer()));
+  zip.file('Kontrola_vzorcu_a_exportu.txt',zslArchiveAuditText(workbook));
   const rows=[['ID','Datum','Polozka','Dodavatel','Castka pro ZSL','Mena ZSL','Puvodni castka','Puvodni mena','Prepocteno do EUR','Kategorie','Sekce ZSL podle s.3','Vozidlo / ECV','Zpusob platby','Doklady']];
   for(const [index,e] of expenses.entries()){
     const dir=folder.folder(String(index+1).padStart(3,'0')+'_'+safeFilename(e.merchant||e.receipt_name||'vydaj'));
@@ -70,9 +140,9 @@ export async function exportEvent(event,expenses,funding){
       {id:e.bank_path,prefix:'Bankovni_potvrzeni',name:e.bank_name}
     ]){
       if(!f.id)continue;
-      const doc=await getOne('documents',f.id);
+      const doc=await documentReader('documents',f.id);
       if(!doc||!doc.blob){dir.file('CHYBI_PRILOHA_'+f.prefix+'.txt','Soubor chybí v lokální databázi.');continue}
-      dir.file(f.prefix+'_'+safeFilename(f.name||doc.name),doc.blob);
+      dir.file(f.prefix+'_'+safeFilename(f.name||doc.name),new Uint8Array(await doc.blob.arrayBuffer()));
     }
   }
   zip.file('Vydaje.csv','\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n'));
@@ -82,5 +152,14 @@ export async function exportEvent(event,expenses,funding){
   ].map(r=>r.map(csvCell).join(';')).join('\r\n'));
   zip.file('Kontrola_dokladu.txt',expenses.filter(e=>expenseStatus(e)!=='Doklady kompletní').map(e=>[e.merchant||e.receipt_name,e.amount,expenseStatus(e)].join(' | ')).join('\r\n')||'Všechny doklady jsou kompletní.');
   const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:1}});
-  downloadBlob(blob,'ZSL_'+safeFilename(event.name)+'_vyuctovani.zip');
+  return {blob,filename:'ZSL_'+safeFilename(event.name)+'_vyuctovani.zip',
+    workbookFilename:workbook.filename,financialReceiptCount:workbook.financialReceiptCount,
+    expectedReceiptCount:workbook.expectedReceiptCount,
+    formulaCount:workbook.integrity.preservedFormulas,
+    skipped:[...workbook.skipped,...workbook.conflicts]};
+}
+export async function exportEvent(event,expenses,funding,options={}){
+  const result=await buildEventArchive(event,expenses,funding,options);
+  downloadBlob(result.blob,result.filename);
+  return result;
 }

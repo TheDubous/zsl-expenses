@@ -230,7 +230,7 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
  const financialReceiptCount=recordedIds.size;
  const financialAmount=expenses.filter(x=>recordedIds.has(String(x.id)))
    .reduce((sum,x)=>sum+Math.round(Number(x.amount||0)*100),0)/100;
- if(expenses.length>0&&financialReceiptCount===0){
+ if(expenses.length>0&&financialReceiptCount===0&&!options.allowZeroFinancial){
   const reasons=[...skipped,...conflicts];
   throw new Error('Excel by neobsahoval žádnou finanční položku, proto se nestáhl. '+
     (reasons.length?reasons.slice(0,3).join(' | '):
@@ -313,7 +313,8 @@ export async function createFilledXlsx(blob,{event,trainer,riders,expenses,fundi
  const out=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:5}});
  return {blob:out,template:inspected,changes,warnings,skipped,conflicts,
   formulaCache:{...formulaCache,repairedForeignMealRows:repairedFormulaRows},
-  integrity:{preservedFormulas,preservedStyles,sheets:sheets.size},
+  integrity:{preservedFormulas,preservedStyles,sheets:sheets.size,
+    addedForeignMealFormulas:repairedFormulaRows.map(row=>'L'+row)},
   financialReceiptCount,financialAmount,
   expectedReceiptCount:expenses.length,
   filename:'ZSL_VYPLNENY_ORIGINAL_'+safeFilename(event?.name||'vyuctovanie')+'.xlsx'};

@@ -260,14 +260,28 @@ function App(){
     await run(async()=>{await deleteExpense(row);setNotice('Výdaj a související přílohy byly odstraněny.')})
   }
   async function doBackup(){
-    await run(async()=>{const result=await exportBackup();setNotice('Kompletní záloha vytvořena: '+result.events+' akcí, '+result.documents+' příloh. Ulož ZIP mimo aplikaci (např. Soubory / iCloud Drive).')});
+    await run(async()=>{
+      const result=await exportBackup({event:active,trainer,riders:reportRiders,expenses,funding});
+      setNotice('Kompletní záloha vytvořena: '+result.events+' akcí, '+result.documents+' příloh. '+
+        (result.xlsxIncluded?'Vyplněný originální Excel pro aktuální akci je v ZIP ve složce Vyuctovani_ZSL.':
+          result.xlsxError?'Excel pro aktuální akci nelze přidat: '+result.xlsxError+' (data a doklady jsou bezpečně zálohované).':'')+
+        ' Ulož ZIP mimo aplikaci (např. Soubory / iCloud Drive).');
+    });
   }
   async function doRestore(file){
     if(!file)return;
     if(!window.confirm('Obnovení NAHRADÍ všechna dosavadní data tohoto telefonu daty ze zálohy. Doporučujeme nejdřív vytvořit vlastní ZIP zálohu. Pokračovat?'))return;
     await run(async()=>{const r=await importBackup(file);setActiveId(null);setView('overview');setNotice('Obnoveno '+r.events+' akcí, '+r.expenses+' výdajů a '+r.documents+' příloh.')})
   }
-  async function doExport(){await run(async()=>{await exportEvent(active,expenses,funding);setNotice('Vyúčtování ZIP připravené ke stažení.')})}
+  async function doExport(){
+    if(!active)return;
+    await run(async()=>{
+      const result=await exportEvent(active,expenses,funding,{trainer,riders:reportRiders});
+      setNotice('ZIP vyúčtování obsahuje kompletní vyplněný Excel ZSL ('+result.formulaCount+
+        ' zachovaných originálních vzorců), doklady a CSV.'+
+        (result.skipped.length?' Pozor: '+result.skipped.length+' položek či buněk vyžaduje doplnění podle souboru Kontrola_vzorcu_a_exportu.txt.':''));
+    });
+  }
   async function loadDefaultTemplate(){
     await run(async()=>{
       const info=await ensureBundledZslTemplate();
@@ -424,7 +438,7 @@ function App(){
         </div>
       </div>)}
       <Button onClick={doExport} disabled={busy||expenses.length===0}><FolderArchive size={17}/> ZIP tohoto vyúčtování</Button>
-      <p className="muted smalltext">ZIP zůstává jako záloha souborů. Hlavní výstupy najdeš v záložce <strong>Náhled</strong>: originální vyplněný XLSX a samostatné PDF s doklady.</p>
+      <p className="muted smalltext">ZIP tohoto vyúčtování obsahuje <strong>celý vyplněný originální Excel ZSL (.xlsx) se všemi původními listy a vzorci</strong>, původní účtenky, bankovní potvrzení, CSV a textovou kontrolu vzorců. V Excelu můžeš po stažení doplnit další údaje. Pro úplné přepočítání vzorců otevři XLSX v Microsoft Excelu.</p>
     </div>;
   }
 
@@ -484,6 +498,7 @@ function App(){
       <div className="panel"><div className="heading"><h3>Kompletní záloha</h3><FolderArchive size={20}/></div>
         <p className="muted">Zahrnuje všechny trenéry, jezdce, soustředění i závody, finanční pohyby a originální fotografie a PDF doklady.</p>
         <Button onClick={doBackup} disabled={busy}><Download size={17}/> Stáhnout kompletní zálohu ZIP</Button>
+        <p className="muted smalltext">Záloha obsahuje všechna data a přílohy pro obnovení. Navíc přiloží vyplněný originální Excel pro právě otevřenou akci, pokud se ho podaří bezpečně sestavit.</p>
       </div>
       <div className="panel"><div className="heading"><h3>Obnova ze zálohy</h3><Upload size={20}/></div>
         <p className="muted">Zálohu můžeš otevřít i na jiném telefonu. Obnovením přepíšeš všechna současná lokální data, proto si předem ulož vlastní zálohu.</p>
