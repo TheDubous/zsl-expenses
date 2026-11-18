@@ -164,3 +164,31 @@ console.log('ZIP XLSX vs verified source template – complete formula compariso
  JSON.stringify({sheets:info.sheets.length,originalFormulasUnchanged:checkedFormulas,
   missingOrModifiedFormulas:0,allowedForeignMealFormulasAdded:addedFormulas,
   workbookInsideZip:packed.workbookFilename,financialReceipts:packed.financialReceiptCount}));
+
+
+// In the REAL published template, verify the tour leader and functional team
+// use only existing empty person/role fields on s.6, not a new private sheet.
+const members=[
+ {id:'leader',name:'TEST TOUR LEADER',kind:'staff',roleLabel:'Tréner',isLeader:true},
+ {id:'trainer',name:'TEST TRAINER',kind:'staff',roleLabel:'Tréner',isLeader:false},
+ {id:'service',name:'TEST SERVICE',kind:'staff',roleLabel:'Servisný technik',isLeader:false},
+ {id:'athlete',name:'TEST ATHLETE',kind:'athlete',roleLabel:'Športovec',isLeader:false}
+];
+const teamResult=await createFilledXlsx(blob,{...data,members},{...xml,allowExisting:true});
+for(const [cell,value] of [
+ ['C26','TEST TOUR LEADER'],['F26','Vedúci výjazdu'],
+ ['C27','TEST TRAINER'],['F27','Tréner'],
+ ['C28','TEST SERVICE'],['F28','Servisný technik'],
+ ['C29','TEST ATHLETE'],['F29','Športovec']
+]){
+ if(!teamResult.changes.some(x=>x.sheet==='s.6 - správa'&&x.cell===cell&&x.value===value))
+  throw Error('Původní ZSL s.6 nemá dostupnou buňku pro tým: '+cell+' '+value);
+}
+const memberArchive=await buildEventArchive(data.event,data.expenses,data.funding,{
+ trainer:data.trainer,riders:data.riders,members,templateBlob:blob,xlsxOptions:xml,
+ documentReader:async()=>null
+});
+const memberZIP=await JSZip.loadAsync(memberArchive.blob);
+if(!memberZIP.file('Ucastnici.csv')||!(await memberZIP.file('Ucastnici.csv').async('string')).includes('TEST SERVICE'))
+ throw Error('ZIP musí obsahovat úplný seznam sportovců, trenérů, servisního týmu a vedoucího.');
+console.log('Verified real ZSL participant fields and full participant ZIP roster:',teamResult.changes.filter(x=>x.sheet==='s.6 - správa').length);
