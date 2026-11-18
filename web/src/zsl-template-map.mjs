@@ -122,7 +122,7 @@ export function exportExpenseReadiness(expense,event){
     issues.push('neznámá sekce výkazu');
   return {name,section,issues,warnings,canExport:issues.length===0};
 }
-export function buildTemplatePatches({event,trainer,riders=[],expenses=[],funding=[],variant='user-double-log'}){
+export function buildTemplatePatches({event,trainer,riders=[],members=[],expenses=[],funding=[],variant='user-double-log'}){
  const patches=[],warnings=[],skipped=[];
  const add=p=>{if(p)patches.push(p)};
  const coach=[trainer?.title,trainer?.name].filter(Boolean).join(' ');
@@ -190,11 +190,30 @@ export function buildTemplatePatches({event,trainer,riders=[],expenses=[],fundin
   }
   cells.filter(Boolean).forEach(p=>add({...p,group:'receipt:'+e.id,rowStart:cfg.start,rowEnd:cfg.end}));
  }
+ // Person in the expense-order fields remains the financial claimant; the
+ // trip leader is an INDEPENDENT event assignment. Never replace B4/B18 with
+ // the leader's name merely because they lead this team.
  if(event?.reportText){
-  add(t(S6,'B3',event.reportText));add(t(S6,'D20',trainer?.name));
-  add(n(S6,'I20',excelDateSerial(event?.endsOn)));add(t(S6,'C26',trainer?.name));
-  add(t(S6,'F26',trainer?.role||'Tréner'));
-  riders.slice(0,20).forEach((r,i)=>{add(t(S6,'C'+(27+i),r.name));add(t(S6,'F'+(27+i),'Športovec'));});
+  add(t(S6,'B3',event.reportText));
+  add(t(S6,'D20',trainer?.name));
+  add(n(S6,'I20',excelDateSerial(event?.endsOn)));
  }
+ // Reuse the existing C26:F46 person/role rows in the original s.6 sheet.
+ // The public template is NOT expanded or rebuilt. Every patch is still
+ // checked against empty original cells and formula integrity by the writer.
+ const originalTeam=members.length?members:[
+  ...(trainer?.name?[{name:trainer.name,roleLabel:trainer.role||'Tréner',kind:'staff'}]:[]),
+  ...riders.map(person=>({name:person.name,roleLabel:'Športovec',kind:'athlete'}))
+ ];
+ const leader=originalTeam.find(person=>person.isLeader);
+ const ordered=leader?[leader,...originalTeam.filter(person=>person!==leader)]:originalTeam;
+ ordered.slice(0,21).forEach((person,index)=>{
+  const row=26+index;
+  add(t(S6,'C'+row,person.name));
+  add(t(S6,'F'+row,person.isLeader?'Vedúci výjazdu':person.roleLabel||'Športovec'));
+ });
+ if(ordered.length>21)
+  warnings.push('Na list s.6 se vejde pouze 21 účastníků; ostatní jsou uvedeni v souboru Ucastnici.csv v ZIPu.');
+ 
  return {patches,warnings,skipped};
 }

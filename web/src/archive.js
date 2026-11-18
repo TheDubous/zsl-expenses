@@ -18,7 +18,7 @@ export function downloadBlob(blob,name){
  * Uses the same audited XLSX writer as the standalone export, not a CSV
  * reconstruction. No private receipt is uploaded, and no data is mutated.
  */
-export async function prepareZslWorkbookForArchive({event,trainer,riders=[],expenses=[],funding=[]},
+export async function prepareZslWorkbookForArchive({event,trainer,riders=[],members=[],expenses=[],funding=[]},
   {templateBlob=null,xlsxOptions={}}={}){
   if(!event)throw new Error('Nejdřív vyber akci, pro kterou chceš vytvořit Excel.');
   // Dynamic import avoids a module initialization cycle: zsl-xlsx imports
@@ -34,9 +34,23 @@ export async function prepareZslWorkbookForArchive({event,trainer,riders=[],expe
     source=doc?.blob;
   }
   if(!source)throw new Error('Nelze přidat Excel do ZIP: původní ZSL šablona není uložená. Otevři Náhled a načti oficiální šablonu.');
-  return createFilledXlsx(source,{event,trainer,riders,expenses,funding},
+  return createFilledXlsx(source,{event,trainer,riders,members,expenses,funding},
     {...xlsxOptions,allowZeroFinancial:true});
 }
+export function participantCsv(members=[]){
+  const rows=[['Jméno a příjmení','Typ účastníka','Role na akci','Vedoucí výjezdu',
+    'Klub / organizace','Ročník narození','Kontakt (personál)']];
+  for(const person of members){
+    rows.push([person.name,person.kind==='athlete'?'Sportovec':'Realizační tým',
+      person.roleLabel,person.isLeader?'ANO':'NE',person.club||'',
+      person.birthYear||'',person.contact||'']);
+  }
+  // Prevent names/notes from being interpreted as spreadsheet formulas when
+  // the roster CSV is opened in Excel. Original data stays untouched.
+  const safe=value=>{const x=String(value??'');return /^\s*[=+@-]/.test(x)?"'"+x:x};
+  return '\ufeff'+rows.map(row=>row.map(value=>csvCell(safe(value))).join(';')).join('\r\n');
+}
+
 export function zslArchiveAuditText(result){
   const report=[
     'ZSL Expenses – kontrola originálního Excelu',
@@ -58,7 +72,7 @@ export function zslArchiveAuditText(result){
   return report.join('\r\n');
 }
 
-export async function exportBackup({event=null,trainer=null,riders=[],expenses=[],funding=[]}={}){
+export async function exportBackup({event=null,trainer=null,riders=[],members=[],expenses=[],funding=[]}={}){
   const contents=await snapshot();
   const zip=new JSZip();
   const documents=[];
@@ -73,9 +87,10 @@ export async function exportBackup({event=null,trainer=null,riders=[],expenses=[
   // Keep the complete restorable backup independent of Excel readiness.
   // A failed XLSX build must never prevent recovery of receipts and data.
   let xlsxIncluded=false,xlsxError=null;
+  if(event)zip.file('Vyuctovani_ZSL/Ucastnici.csv',participantCsv(members));
   if(event){
     try{
-      const result=await prepareZslWorkbookForArchive({event,trainer,riders,expenses,funding});
+      const result=await prepareZslWorkbookForArchive({event,trainer,riders,members,expenses,funding});
       zip.file('Vyuctovani_ZSL/'+result.filename,new Uint8Array(await result.blob.arrayBuffer()));
       zip.file('Vyuctovani_ZSL/Kontrola_vzorcu_a_exportu.txt',zslArchiveAuditText(result));
       xlsxIncluded=true;
@@ -124,12 +139,13 @@ export async function importBackup(file){
  * The ZIP contains a full original-format XLSX beside the receipts/CSVs.
  */
 export async function buildEventArchive(event,expenses,funding,options={}){
-  const {trainer=null,riders=[],templateBlob=null,xlsxOptions={},documentReader=getOne}=options;
-  const workbook=await prepareZslWorkbookForArchive({event,trainer,riders,expenses,funding},
+  const {trainer=null,riders=[],members=[],templateBlob=null,xlsxOptions={},documentReader=getOne}=options;
+  const workbook=await prepareZslWorkbookForArchive({event,trainer,riders,members,expenses,funding},
     {templateBlob,xlsxOptions});
   const zip=new JSZip(),folder=zip.folder('Doklady');
   zip.file(workbook.filename,new Uint8Array(await workbook.blob.arrayBuffer()));
   zip.file('Kontrola_vzorcu_a_exportu.txt',zslArchiveAuditText(workbook));
+  zip.file('Ucastnici.csv',participantCsv(members));
   const rows=[['ID','Datum','Polozka','Dodavatel','Castka pro ZSL','Mena ZSL','Puvodni castka','Puvodni mena','Prepocteno do EUR','Kategorie','Sekce ZSL podle s.3','Vozidlo / ECV','Zpusob platby','Doklady']];
   for(const [index,e] of expenses.entries()){
     const dir=folder.folder(String(index+1).padStart(3,'0')+'_'+safeFilename(e.merchant||e.receipt_name||'vydaj'));

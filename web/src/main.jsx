@@ -10,7 +10,7 @@ import {createOCRSession,canRecognize} from './ocr.js';
 import {recognizePdf,isPdf} from './pdf-reader.js';
 import {mergeRecognizedExpense,isCurrencyConversionPending,requiresCurrencyConversion,originalAmountDisplay} from './receipt-import.mjs';
 import {buildOcrDiagnostic} from './ocr-diagnostics.mjs';
-import {applyRosterChange} from './roster.mjs';
+import {resolveEventParticipants,applyTeamChange,TEAM_ROLES} from './event-participants.mjs';
 import {makeZslReport,ZSL_EXPENSE_SECTIONS,NOT_COMPUTED} from './zsl-report.mjs';
 import {exportExpenseReadiness,buildTemplatePatches,receiptItemLabel,isMotorwayVignette} from './zsl-template-map.mjs';
 import {suspiciousReceiptGroups} from './export-preflight.mjs';
@@ -35,6 +35,38 @@ function Select({label,children,...props}){return <label className="input-label"
 function Pill({children,ok=false,warn=false}){return <span className={'pill '+(ok?'ok':warn?'warn':'')}>{children}</span>}
 function Placeholder({title,text,icon:Icon=Receipt}){return <div className="empty"><Icon size={31}/><strong>{title}</strong><span>{text}</span></div>}
 function Status({item}){const value=expenseStatus(item);return <Pill ok={value==='Doklady kompletní'} warn={value!=='Doklady kompletní'}>{value==='Doklady kompletní'?<CheckCircle2 size={13}/>:<AlertTriangle size={13}/>} {value}</Pill>}
+
+
+function TeamSelection({people=[],assignments=[],leaderId='',primaryId=''}) {
+ const selected=new Map(assignments.map(a=>[a.personId,a.role]));
+ return <div className="team-section">
+   <p className="muted"><strong>Realizační tým</strong> · trenéři, asistenti, servis a doprovod. Vyúčtovatel je účastníkem automaticky; role mohou být na každé akci jiné.</p>
+   <div className="team-choices">
+     {people.map(person=><div className="team-choice" key={person.id}>
+       <label><input type="checkbox" name="staffIds" value={person.id}
+         defaultChecked={selected.has(person.id)}/>{person.name}{person.id===primaryId?' (vyúčtovatel)':''}</label>
+       <select aria-label={'Role osoby '+person.name} name={'staffRole:'+person.id}
+         defaultValue={selected.get(person.id)||'coach'}>
+         {TEAM_ROLES.map(role=><option key={role.id} value={role.id}>{role.label}</option>)}
+       </select>
+     </div>)}
+   </div>
+   <label className="input-label"><span>Vedoucí výjezdu (nezávisle na vyúčtovateli)</span>
+     <select name="tourLeaderId" defaultValue={leaderId}>
+       <option value="">Zatím neurčeno</option>
+       {people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}
+     </select>
+   </label>
+   <p className="muted smalltext">Vedoucí je automaticky zahrnut mezi účastníky, i pokud není zvlášť zaškrtnutý.</p>
+ </div>;
+}
+function extractTeamFields(form,people) {
+ const valid=new Set(people.map(person=>person.id));
+ const staffAssignments=[...new Set(form.getAll('staffIds'))].filter(id=>valid.has(id))
+   .map(personId=>({personId,role:String(form.get('staffRole:'+personId)||'coach')}));
+ const leader=String(form.get('tourLeaderId')||'');
+ return {staffAssignments,tourLeaderId:valid.has(leader)?leader:''};
+}
 
 function App(){
   const [db,setDb]=useState(initial);
@@ -74,8 +106,8 @@ function App(){
   const funding=useMemo(()=>db.funding.filter(x=>x.eventId===active?.id).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),[db.funding,active?.id]);
   const summary=useMemo(()=>summarize(expenses,funding),[expenses,funding]);
   const trainer=db.trainers.find(x=>x.id===active?.trainerId);
-  const participants=active?.riderIds?.map(id=>db.riders.find(r=>r.id===id)?.name).filter(Boolean)||[];
   const reportRiders=useMemo(()=>db.riders.filter(r=>(active?.riderIds||[]).includes(r.id)),[db.riders,active?.riderIds]);
+  const teamMembers=useMemo(()=>resolveEventParticipants(active||{},db.trainers,db.riders),[active,db.trainers,db.riders]);
   const zslReport=useMemo(()=>active?makeZslReport({event:active,trainer,riders:reportRiders,expenses,funding}):null,[active,trainer,reportRiders,expenses,funding]);
 
   async function run(action){
@@ -106,7 +138,9 @@ function App(){
   async function addRider(e){
     e.preventDefault();const form=e.currentTarget;const f=new FormData(form),name=String(f.get('rider')||'').trim();
     if(!name)return;
-    await run(async()=>{await putOne('riders',{id:uid(),name,createdAt:new Date().toISOString()});form.reset();setNotice('Jezdec přidán.')})
+    await run(async()=>{await putOne('riders',{id:uid(),name,club:String(f.get('club')||'').trim(),
+      birthYear:String(f.get('birthYear')||'').trim(),notes:String(f.get('notes')||'').trim(),
+      createdAt:new Date().toISOString()});form.reset();setNotice('Sportovec přidán.')})
   }
   async function createEvent(e){
     e.preventDefault();const f=new FormData(e.currentTarget),name=String(f.get('name')||'').trim(),advance=decimal(f.get('advance'));
@@ -114,7 +148,7 @@ function App(){
     if(f.get('start')&&f.get('end')&&f.get('end')<f.get('start')){setError('Datum konce nemůže být před začátkem.');return}
     await run(async()=>{
       const idEvent=uid();
-      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
+      await putOne('events',{id:idEvent,name,kind:f.get('kind'),trainerId:f.get('trainer'),riderIds:f.getAll('riders'),rosterChanges:[],...extractTeamFields(f,db.trainers),teamChanges:[],location:String(f.get('location')||''),country:String(f.get('country')||''),purpose:String(f.get('purpose')||''),
         defaultFuelSection:'zsl_car',
         vehicleDetails:String(f.get('vehicleDetails')||'').trim(),startPlace:String(f.get('startPlace')||''),startTime:String(f.get('startTime')||''),endPlace:String(f.get('endPlace')||''),endTime:String(f.get('endTime')||''),advanceNumber:String(f.get('advanceNumber')||''),reportText:String(f.get('reportText')||''),startsOn:f.get('start'),endsOn:f.get('end'),currency:f.get('currency'),createdAt:new Date().toISOString()});
       if(advance>0)await putOne('funding',{id:uid(),eventId:idEvent,kind:'advance',amount:advance,occurredOn:today(),note:'Počáteční záloha',createdAt:new Date().toISOString()});
@@ -125,17 +159,20 @@ function App(){
     e.preventDefault();if(!active)return;
     const f=new FormData(e.currentTarget),next=f.getAll('riders');
     await run(async()=>{
-      await putOne('events',applyRosterChange(active,next,new Date().toISOString(),String(f.get('rosterReason')||'').trim()));
-      setNotice('Soupiska byla aktualizována; odjezdy a návraty jsou uložené v historii.');
+      await putOne('events',applyTeamChange(active,{riderIds:next,
+        ...extractTeamFields(f,db.trainers)},new Date().toISOString(),String(f.get('rosterReason')||'').trim()));
+      setNotice('Účastníci, role týmu a vedoucí výjezdu byli uloženi.');
     });
   }
   async function renameRider(e){
     e.preventDefault();
     if(!editingRider)return;
-    const form=e.currentTarget,name=String(new FormData(form).get('riderName')||'').trim();
+    const form=e.currentTarget,f=new FormData(form),name=String(f.get('riderName')||'').trim();
     if(!name){setError('Jméno jezdce nesmí být prázdné.');return}
     if(db.riders.some(r=>r.id!==editingRider.id&&r.name.toLowerCase()===name.toLowerCase())){setError('Jezdec s tímto jménem už je uložený.');return}
-    await run(async()=>{await putOne('riders',{...editingRider,name});setEditingRider(null);setNotice('Jméno jezdce upraveno ve všech soustředěních a závodech.');});
+    await run(async()=>{await putOne('riders',{...editingRider,name,club:String(f.get('club')||'').trim(),
+      birthYear:String(f.get('birthYear')||'').trim(),notes:String(f.get('notes')||'').trim()});
+      setEditingRider(null);setNotice('Profil sportovce upraven ve všech akcích.');});
   }
   async function toggleRiderActive(rider){
     await run(async()=>{
@@ -261,7 +298,7 @@ function App(){
   }
   async function doBackup(){
     await run(async()=>{
-      const result=await exportBackup({event:active,trainer,riders:reportRiders,expenses,funding});
+      const result=await exportBackup({event:active,trainer,riders:reportRiders,members:teamMembers,expenses,funding});
       setNotice('Kompletní záloha vytvořena: '+result.events+' akcí, '+result.documents+' příloh. '+
         (result.xlsxIncluded?'Vyplněný originální Excel pro aktuální akci je v ZIP ve složce Vyuctovani_ZSL.':
           result.xlsxError?'Excel pro aktuální akci nelze přidat: '+result.xlsxError+' (data a doklady jsou bezpečně zálohované).':'')+
@@ -276,7 +313,7 @@ function App(){
   async function doExport(){
     if(!active)return;
     await run(async()=>{
-      const result=await exportEvent(active,expenses,funding,{trainer,riders:reportRiders});
+      const result=await exportEvent(active,expenses,funding,{trainer,riders:reportRiders,members:teamMembers});
       setNotice('ZIP vyúčtování obsahuje kompletní vyplněný Excel ZSL ('+result.formulaCount+
         ' zachovaných originálních vzorců), doklady a CSV.'+
         (result.skipped.length?' Pozor: '+result.skipped.length+' položek či buněk vyžaduje doplnění podle souboru Kontrola_vzorcu_a_exportu.txt.':''));
@@ -312,7 +349,7 @@ function App(){
       setView('preview');
       return;
     }
-    const plan=buildTemplatePatches({event:active,trainer,riders:reportRiders,expenses,funding,
+    const plan=buildTemplatePatches({event:active,trainer,riders:reportRiders,members:teamMembers,expenses,funding,
       variant:templateInfo?.variant||'official'});
     if(plan.skipped.length||duplicates.length){
       const examples=duplicates.map(x=>x.label+' '+currency(x.amount,active.currency)+' ('+x.ids.length+'×)').join('; ');
@@ -326,7 +363,7 @@ function App(){
       if(!window.confirm(message)){setView('preview');return;}
     }
     await run(async()=>{
-      const result=await downloadFilledOriginal({event:active,trainer,riders:reportRiders,expenses,funding},{allowExisting});
+      const result=await downloadFilledOriginal({event:active,trainer,riders:reportRiders,members:teamMembers,expenses,funding},{allowExisting});
       const {blob,...audit}=result;setExportAudit(audit);
       setNotice((result.financialReceiptCount<result.expectedReceiptCount?'POZOR – NEÚPLNÝ EXPORT. ':'')+'Vyplněný původní XLSX stažen: '+result.financialReceiptCount+' z '+result.expectedReceiptCount+' výdajů ('+currency(result.financialAmount,active.currency)+'). Zachováno '+result.integrity.preservedFormulas+' vzorců. Otevři v Microsoft Excelu pro úplný přepočet.');
     });
@@ -396,7 +433,12 @@ function App(){
         </form>
         {funding.length>0&&<div className="funding-list">{funding.map(x=><div key={x.id}><span>{x.kind==='advance'?'+ Záloha':'− Vráceno'} · {showDate(x.occurredOn)} {x.note&&'· '+x.note}</span><strong>{currency(x.amount,active.currency)}</strong></div>)}</div>}
       </div>
-      <div className="panel"><div className="heading"><h3>Účastníci akce</h3><Users size={20}/></div><p className="muted">{trainer?.name||'Trenér není vybraný'} · {participants.join(', ')||'Bez zvolených jezdců'}</p></div>
+      <div className="panel"><div className="heading"><h3>Účastníci akce</h3><Users size={20}/></div>
+         <p className="muted"><strong>Vedoucí výjezdu:</strong> {teamMembers.find(person=>person.isLeader)?.name||'Zatím neurčen'}. <strong>Vyúčtovatel:</strong> {trainer?.name||'Neurčen'}.</p>
+         <div className="rider-list">{teamMembers.map(person=><span key={person.kind+person.id} className="trainer-chip">
+           {person.name} · {person.isLeader?'Vedoucí výjezdu / ':''}{person.roleLabel}
+         </span>)}</div>
+       </div>
     </div>;
   }
 
@@ -437,15 +479,15 @@ function App(){
           <Button small secondary danger onClick={()=>removeExpense(e)}><Trash2 size={14}/></Button>
         </div>
       </div>)}
-      <Button onClick={doExport} disabled={busy||expenses.length===0}><FolderArchive size={17}/> ZIP tohoto vyúčtování</Button>
+      <Button onClick={doExport} disabled={busy||!active}><FolderArchive size={17}/> ZIP tohoto vyúčtování</Button>
       <p className="muted smalltext">ZIP tohoto vyúčtování obsahuje <strong>celý vyplněný originální Excel ZSL (.xlsx) se všemi původními listy a vzorci</strong>, původní účtenky, bankovní potvrzení, CSV a textovou kontrolu vzorců. V Excelu můžeš po stažení doplnit další údaje. Pro úplné přepočítání vzorců otevři XLSX v Microsoft Excelu.</p>
     </div>;
   }
 
   function People(){
     return <div className="stack">
-      <div className="panel"><div className="heading"><h3>Profily trenérů – podle formuláře ZSL</h3><Users size={20}/></div>
-        <p className="muted">Vyplň jednou údaje z listu <strong>s.1 – pokyn</strong>. Zůstanou v telefonu a použijí se do náhledu každého vyúčtování.</p>
+      <div className="panel"><div className="heading"><h3>Profily trenérů a realizačního týmu</h3><Users size={20}/></div>
+        <p className="muted">Ulož trenéry, asistenty, servisáky i další personál. Každá osoba může mít na různých akcích jinou roli. Pouze vyúčtovatel se používá pro osobní a bankovní pole formuláře ZSL.</p>
         <form onSubmit={addTrainer} key={editingTrainer?.id||'new-trainer'} className="grid-form">
           <div className="two-col"><Input label="Jméno a příjmení *" name="name" defaultValue={editingTrainer?.name||''} required/><Input label="Titul" name="title" defaultValue={editingTrainer?.title||''} placeholder="Mgr., Bc., Ing."/></div>
           <div className="two-col"><Input label="Funkcia / pozice" name="role" defaultValue={editingTrainer?.role||'Tréner'}/><Input label="Oddelenie ZSL" name="department" defaultValue={editingTrainer?.department||'Sekcia moderných disciplín'}/></div>
@@ -455,34 +497,56 @@ function App(){
           <div className="two-col"><Input label="BIC / SWIFT (navíc)" name="bic" defaultValue={editingTrainer?.bic||''}/><Input label="Název banky (navíc)" name="bankName" defaultValue={editingTrainer?.bankName||''}/></div>
           <Input label="Klub / organizace" name="club" defaultValue={editingTrainer?.club||'ZSL'}/>
           <Input label="Poznámky" name="notes" defaultValue={editingTrainer?.notes||''}/>
-          <Button disabled={busy} type="submit">{editingTrainer?'Uložit upravený profil':'Přidat trenéra'}</Button>
+          <Button disabled={busy} type="submit">{editingTrainer?'Uložit upravený profil':'Přidat člena týmu'}</Button>
           {editingTrainer&&<Button secondary onClick={()=>setEditingTrainer(null)}>Zrušit úpravy</Button>}
         </form>
         {db.trainers.length>0&&<div className="rider-list">{db.trainers.map(t=><button key={t.id} className="trainer-chip" onClick={()=>setEditingTrainer(t)}>{t.name} · {t.club} <Settings2 size={14}/></button>)}</div>}
         <p className="muted smalltext">IBAN zůstává uložený pouze v tomto zařízení a objeví se v kompletní záloze ZIP. Zálohu předávej bezpečně.</p>
       </div>
-      <div className="panel"><div className="heading"><h3>Jezdci a stav v databázi</h3><Users size={20}/></div>
+      <div className="panel"><div className="heading"><h3>Sportovci a stav v databázi</h3><Users size={20}/></div>
         <p className="muted">Archivace jen skryje jezdce z výběru do nových akcí. Nevymaže jeho historii ani účast ve starších vyúčtováních.</p>
-        <form onSubmit={addRider} className="form-row"><Input name="rider" label="Jméno jezdce" placeholder="Jméno a příjmení" required/><Button type="submit" disabled={busy}><Plus size={16}/> Přidat</Button></form>
+        <form onSubmit={addRider} className="grid-form">
+          <Input name="rider" label="Jméno a příjmení sportovce" placeholder="Jméno a příjmení" required/>
+          <div className="two-col"><Input name="club" label="Klub / oddíl (volitelné)"/><Input name="birthYear" label="Ročník narození (volitelné)" inputMode="numeric" maxLength="4" placeholder="2011"/></div>
+          <Input name="notes" label="Poznámka (volitelné)"/>
+          <Button type="submit" disabled={busy}><Plus size={16}/> Přidat sportovce</Button>
+        </form>
         {db.riders.length===0?<p className="muted">Zatím nemáš uložené žádné jezdce.</p>:<div className="rider-manager">
           {[...db.riders].sort((a,b)=>Number(!!a.inactive)-Number(!!b.inactive)||a.name.localeCompare(b.name)).map(r=><div className="rider-row" key={r.id}>
-            <div><strong>{r.name}</strong><span>{r.inactive?'Archivovaný':'Aktivní'}</span></div>
+            <div><strong>{r.name}</strong><span>{[r.club,r.birthYear,r.inactive?'Archivovaný':'Aktivní'].filter(Boolean).join(' · ')}</span></div>
             <div className="rider-actions"><Button small secondary onClick={()=>setEditingRider(r)}>Upravit</Button><Button small secondary onClick={()=>toggleRiderActive(r)}>{r.inactive?<><UserCheck size={15}/> Vrátit</>:<><UserX size={15}/> Archivovat</>}</Button></div>
           </div>)}
         </div>}
-        {editingRider&&<form className="form-row" key={editingRider.id} onSubmit={renameRider}><Input label="Upravit jméno jezdce" name="riderName" defaultValue={editingRider.name} required/><Button type="submit" disabled={busy}>Uložit jméno</Button><Button secondary onClick={()=>setEditingRider(null)}>Zrušit</Button></form>}
+        {editingRider&&<form className="grid-form" key={editingRider.id} onSubmit={renameRider}>
+          <Input label="Jméno sportovce" name="riderName" defaultValue={editingRider.name} required/>
+          <div className="two-col"><Input name="club" label="Klub / oddíl" defaultValue={editingRider.club||''}/><Input name="birthYear" label="Ročník narození" maxLength="4" inputMode="numeric" defaultValue={editingRider.birthYear||''}/></div>
+          <Input name="notes" label="Poznámka" defaultValue={editingRider.notes||''}/>
+          <div><Button type="submit" disabled={busy}>Uložit sportovce</Button><Button secondary onClick={()=>setEditingRider(null)}>Zrušit</Button></div>
+        </form>}
       </div>
       {active&&<div className="panel"><div className="heading"><h3>Účastníci aktuální akce</h3><Users size={20}/></div>
-        <p className="muted">Změň soupisku i po zahájení akce. Když někdo odjede nebo nepřijede, odškrtni ho a ulož. Jeho profil ani starší doklady nezmizí.</p>
-        <form key={active.id+':'+(active.riderIds||[]).join(',')} onSubmit={saveRoster} className="grid-form">
+        <p className="muted">Zvol sportovce, trenéry, asistenty, servisní tým a vedoucího výjezdu. Role platí jen pro aktuální akci. Odchod účastníka nevymaže jeho profil ani historické doklady.</p>
+        <form key={active.id+':'+(active.riderIds||[]).join(',')+':'+JSON.stringify(active.staffAssignments||[])+':'+(active.tourLeaderId||'')} onSubmit={saveRoster} className="grid-form"><strong>Sportovci</strong>
           <div className="checks">{db.riders.filter(r=>!r.inactive||(active.riderIds||[]).includes(r.id)).map(r=>
             <label key={r.id}><input type="checkbox" name="riders" value={r.id} defaultChecked={(active.riderIds||[]).includes(r.id)}/>{r.name}{r.inactive&&' (archivovaný)'}</label>)}
             {db.riders.length===0&&<p className="muted">Nejdřív přidej jezdce.</p>}
           </div>
-          <Input label="Důvod změny soupisky (volitelné)" name="rosterReason" placeholder="Nemoc, odjezd, změna nominace…"/><Button type="submit" disabled={busy}>Uložit aktuální soupisku</Button>
+          <TeamSelection people={db.trainers} assignments={active.staffAssignments||[]} leaderId={active.tourLeaderId||''} primaryId={active.trainerId}/>
+          <Input label="Důvod změny soupisky (volitelné)" name="rosterReason" placeholder="Nemoc, odjezd, změna nominace…"/>
+          <Button type="submit" disabled={busy}>Uložit sportovce, tým a vedoucího</Button>
         </form>
         {(active.rosterChanges||[]).length>0&&<details className="roster-history"><summary>Historie změn soupisky ({active.rosterChanges.length})</summary>
           <div>{[...active.rosterChanges].reverse().map((x,i)=><p key={i}><strong>{db.riders.find(r=>r.id===x.riderId)?.name||'Jezdec'}</strong> · {x.action==='joined'?'přidán':'vyřazen'} · {new Date(x.at).toLocaleString('cs-CZ')}{x.reason&&' · '+x.reason}</p>)}</div>
+        </details>}
+        {(active.teamChanges||[]).length>0&&<details className="roster-history"><summary>Historie realizačního týmu a vedoucího ({active.teamChanges.length})</summary>
+          <div>{[...active.teamChanges].reverse().map((change,i)=><p key={i}>
+            <strong>{change.action==='leader_changed'?'Vedoucí výjezdu':db.trainers.find(person=>person.id===change.personId)?.name||'Člen týmu'}</strong>
+            {' · '+(change.action==='leader_changed'?(db.trainers.find(person=>person.id===change.personId)?.name||'neurčen'):
+              change.action==='joined'?'přidán':
+              change.action==='left'?'odebrán':
+              'změněna role na '+(TEAM_ROLES.find(role=>role.id===change.role)?.label||'další roli'))}
+            {' · '+new Date(change.at).toLocaleString('cs-CZ')}{change.reason&&' · '+change.reason}
+          </p>)}</div>
         </details>}
       </div>}
     </div>;
@@ -521,7 +585,7 @@ function App(){
         <span>{active?.kind} · {showDate(active?.startsOn)}{active?.endsOn&&' – '+showDate(active.endsOn)}</span></div>}
       <div className="tab-nav">{[[ 'overview',Wallet,'Přehled'],['documents',Receipt,'Doklady'],['preview',FileSpreadsheet,'Náhled'],['people',Users,'Lidé'],['backup',HardDrive,'Záloha']].map(([name,Icon,label])=><button key={name} className={view===name?'active':''} onClick={()=>setView(name)}><Icon size={18}/>{label}</button>)}</div>
       {view==='people'?<People/>:view==='backup'?<Backup/>:active?(view==='overview'?<Dashboard/>:view==='preview'?<SettlementPreview
-        event={active} trainer={trainer} riders={reportRiders} expenses={expenses} funding={funding}
+        event={active} trainer={trainer} riders={reportRiders} members={teamMembers} expenses={expenses} funding={funding}
         onEditEvent={()=>setEditingEvent(true)} onImportTemplate={importXlsxTemplate}
         onDownloadXlsx={downloadOriginalWorkbook} onDownloadAttachments={downloadProofsPdf}
         templateInfo={templateInfo} exportAudit={exportAudit} attachmentAudit={attachmentAudit} busy={busy} onLoadBuiltIn={loadDefaultTemplate}
@@ -545,7 +609,8 @@ function App(){
           <Input label="Číslo zálohy (volitelné)" name="advanceNumber"/>
           <label className="input-label"><span>SPRÁVA Z PRACOVNEJ CESTY (volitelné)</span><textarea name="reportText" rows="4" placeholder="Shrnutí průběhu soustředění nebo závodů…"/></label>
           <div className="two-col"><Input label="Počáteční záloha" name="advance" defaultValue="0" inputMode="decimal" required/><Select label="Měna" name="currency"><option>EUR</option><option>CZK</option><option>CHF</option></Select></div>
-          <div className="input-label"><span>Jezdci</span><div className="checks">{db.riders.length===0&&<p className="muted">Jezdce přidej v záložce Lidé.</p>}{db.riders.map(r=><label key={r.id}><input type="checkbox" name="riders" value={r.id}/>{r.name}</label>)}</div></div>
+          <div className="input-label"><span>Sportovci</span><div className="checks">{db.riders.length===0&&<p className="muted">Jezdce přidej v záložce Lidé.</p>}{db.riders.map(r=><label key={r.id}><input type="checkbox" name="riders" value={r.id}/>{r.name}</label>)}</div></div>
+          <TeamSelection people={db.trainers}/>
           <Button type="submit" disabled={busy}>Vytvořit soustředění / závody</Button>
         </form>
       </div>

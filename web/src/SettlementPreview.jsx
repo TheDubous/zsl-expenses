@@ -9,12 +9,13 @@ function Message({children,type='warning'}){
  return <div className={'zsl-message '+type}>{type==='warning'?<AlertCircle size={17}/>:<CheckCircle2 size={17}/>}<div>{children}</div></div>;
 }
 export default function SettlementPreview({
- event,trainer,riders=[],expenses=[],funding=[],
+ event,trainer,riders=[],members=[],expenses=[],funding=[],
  onEditEvent,onImportTemplate,onDownloadXlsx,onDownloadAttachments,onLoadBuiltIn,onSetExpenseSection,onEditExpense,templateInfo,exportAudit,attachmentAudit,busy=false
 }){
  const [details,setDetails]=useState(false);
  const [allowExisting,setAllowExisting]=useState(false);
- const proposed=buildTemplatePatches({event,trainer,riders,expenses,funding,variant:templateInfo?.variant});
+ const proposed=buildTemplatePatches({event,trainer,riders,members,expenses,funding,variant:templateInfo?.variant});
+ const tripLeader=members.find(person=>person.isLeader);
  const checks=expenses.map(expense=>({expense,...exportExpenseReadiness(expense,event)}));
  const plannedIds=new Set(proposed.patches
    .filter(p=>String(p.group||'').startsWith('receipt:'))
@@ -26,6 +27,7 @@ export default function SettlementPreview({
  return <div className="stack">
   <div className="panel">
    <div className="heading"><h3><FileSpreadsheet size={20}/> Originální soubor ZSL – Excel</h3></div>
+   <p className="muted"><strong>Účastníci:</strong> {members.length} osob. <strong>Vedoucí výjezdu:</strong> {tripLeader?.name||'zatím neurčen'}. Profily a role nastavíš v záložce Lidé. Úplná soupiska je součástí ZIP vyúčtování.</p>
    <Message type="success"><strong>Šablona je součástí aplikace.</strong> Ve výchozím nastavení se do telefonu automaticky uloží skutečný, veřejně vydaný formulář ZSL. Bez ručního nahrávání. Při exportu se upraví pouze jeho kopie; původní vzorce, rozložení a další listy se zachovají.</Message>
    <p className="muted">Oficiální šablona ZSL má list <strong>s.2 – súhlas MV</strong>. Tvoje dříve nahraná varianta má místo něj druhou knihu jízd. Základní buňky pro vyúčtování jsou společné. Pokud potřebuješ přesně svou upravenou variantu, můžeš ji i nadále vybrat ručně.</p>
    <label className={'btn filebtn '+(busy?'disabled':'')}>
