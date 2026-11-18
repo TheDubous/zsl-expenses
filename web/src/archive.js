@@ -47,7 +47,7 @@ export function participantCsv(members=[]){
   }
   // Prevent names/notes from being interpreted as spreadsheet formulas when
   // the roster CSV is opened in Excel. Original data stays untouched.
-  const safe=value=>{const x=String(value??'');return /^[\\s]*[=+@-]/.test(x)?"'"+x:x};
+  const safe=value=>{const x=String(value??'');return /^\s*[=+@-]/.test(x)?"'"+x:x};
   return '\ufeff'+rows.map(row=>row.map(value=>csvCell(safe(value))).join(';')).join('\r\n');
 }
 
