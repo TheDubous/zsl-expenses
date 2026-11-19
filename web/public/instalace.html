@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="robots" content="noindex">
+  <title>Instalace na iPhone · ZSL Expenses</title>
+  <style>
+    :root { color-scheme: dark; font: 16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#0b1220; color:#f0f4ff; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:env(safe-area-inset-top) max(18px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(18px,env(safe-area-inset-left)); }
+    main { max-width:660px; margin:0 auto; padding:32px 0 65px; }
+    .tag { color:#a6c8ff; font-size:.85rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+    h1 { font-size:clamp(1.8rem,6vw,2.6rem); line-height:1.15; margin:13px 0; }
+    h2 { font-size:1.2rem; margin:0 0 10px; }
+    p { color:#cbd5e1; }
+    .panel { background:#172338; border:1px solid #334661; border-radius:18px; padding:20px; margin:22px 0; }
+    ol { padding-left:23px; margin:10px 0 0; } li { margin:14px 0; padding-left:4px; }
+    strong { color:#fff; }
+    .button { display:block; padding:15px 18px; border-radius:12px; background:#90b6ff; color:#0b1220; text-decoration:none; text-align:center; font-weight:800; margin-top:18px; }
+    .secondary { background:#233c60; color:#e8f0ff; }
+    .hint { color:#a6b6ce; font-size:.9rem; }
+    .status { padding:12px 14px; border-radius:12px; border:1px solid #3d536e; background:#102035; }
+    a { color:#a6c8ff; } details { margin:16px 0; } summary { cursor:pointer; font-weight:700; }
+    .share { display:inline-flex; align-items:center; justify-content:center; border:1.5px solid currentColor; padding:0 6px; border-radius:5px; margin:0 3px; }
+  </style>
+</head>
+<body><main>
+  <div class="tag">ZSL Expenses · 0.9.4 · iPhone</div>
+  <h1>Nainstaluj si ZSL Expenses na plochu</h1>
+  <p>Bez App Storu, bez Apple Developer účtu a bez předávání ZIP souborů. Jde o webovou aplikaci (PWA), nikoli o nativní iOS .ipa.</p>
+  <div class="status" id="deviceStatus" role="status">Pro instalaci otevři tuto stránku na iPhonu v Safari.</div>
+  <section class="panel" aria-labelledby="stepsTitle">
+    <h2 id="stepsTitle">Postup na iPhonu</h2>
+    <ol>
+      <li>Otevři <strong>aplikaci ZSL Expenses</strong> v prohlížeči <strong>Safari</strong> (ne uvnitř WhatsAppu, Gmailu ani jiného prohlížeče).</li>
+      <li>Ve spodní nebo horní liště Safari klepni na <strong>Sdílet</strong> <span class="share" aria-label="symbol sdílení">⇧</span> (čtverec se šipkou).</li>
+      <li>Vyber <strong>Přidat na plochu</strong>. Pokud volbu nevidíš, posuň seznam níže nebo zkus <strong>Upravit akce</strong>.</li>
+      <li>Je-li dostupné přepnutí <strong>Otevřít jako webovou aplikaci</strong>, nech ho zapnuté. Potvrď <strong>Přidat</strong>.</li>
+      <li>Vrať se na plochu a otevři novou ikonu <strong>ZSL Expenses</strong>. Pro offline použití nech aplikaci napoprvé načíst přes internet.</li>
+    </ol>
+    <a class="button" href="./">Otevřít ZSL Expenses</a>
+  </section>
+  <section class="panel">
+    <h2>Když se ikona neobjeví</h2>
+    <details><summary>Otevřel jsem odkaz z WhatsAppu nebo Gmailu</summary><p>Otevři odkaz v Safari přímo (případně zkopíruj adresu a vlož ji do Safari). Pak opakuj Přidat na plochu.</p></details>
+    <details><summary>Nemám volbu Přidat na plochu</summary><p>V Safari vyber Sdílet a sjeď dolů v seznamu akcí. V případě potřeby použij Upravit akce. Zkontroluj také případná omezení nastavená správcem telefonu / Časem u obrazovky.</p></details>
+    <details><summary>Safari se po instalaci pořád otevírá</summary><p>Při přidávání ověř volbu Otevřít jako webovou aplikaci (pokud ji iOS nabízí). Spouštěj ikonu, ne původní záložku v Safari. Pokud se vytvořila jen záložka, vytvoř novou s tímto nastavením.</p></details>
+    <details><summary>Nevidím původní účtenky</summary><p>Samostatně spuštěná PWA může používat oddělené úložiště od Safari. Data se automaticky nepřenášejí. V původní aplikaci nejprve vytvoř kompletní ZIP zálohu a v nové instalaci použij její obnovení. Před obnovením nic nemaž.</p></details>
+    <details><summary>Chci aplikaci používat bez internetu</summary><p>Při prvním otevření potřebuješ internet kvůli stažení aplikace. Poté lze řadu funkcí používat offline, ale některé OCR prostředky a externí zdroje mohou vyžadovat spojení. Před prací bez signálu to vyzkoušej.</p></details>
+  </section>
+  <p class="hint"><strong>Pozor na data:</strong> účtenky a další doklady jsou v lokálním úložišti konkrétní instalace. Před odebráním aplikace, čištěním dat nebo změnou telefonu vždy ulož kompletní ZIP zálohu do Souborů / iCloud Drive.</p>
+  <p class="hint">Zdrojový kód: <a href="https://github.com/TheDubous/zsl-expenses">GitHub · TheDubous/zsl-expenses</a>.</p>
+</main>
+<script>
+  const status = document.getElementById('deviceStatus');
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const iphone = /iPhone|iPod/.test(navigator.userAgent);
+  const safari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent);
+  status.textContent = standalone ? 'Aplikace nebo průvodce je již otevřen v samostatném režimu. ZSL Expenses spustíš tlačítkem níže.' : iphone && safari ? 'Používáš Safari na iPhonu. Otevři aplikaci tlačítkem níže a přidej ji na plochu podle návodu.' : iphone ? 'Na iPhonu otevři odkaz v Safari, teprve potom použij Přidat na plochu.' : 'Instalaci dokonči na iPhonu v Safari. Odkaz si můžeš poslat do telefonu.';
+</script>
+</body></html>

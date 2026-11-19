@@ -1,0 +1,89 @@
+name: Build unsigned ZSL Expenses iOS .app (macOS)
+
+on:
+  push:
+    branches: [feature/ios-pwa-install-guide]
+    paths:
+      - 'web/**'
+      - '.github/workflows/ios-pwa-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unsigned-app:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout full source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install web dependencies
+        working-directory: web
+        run: npm install --no-audit --no-fund
+      - name: Run tests
+        working-directory: web
+        run: npm test
+      - name: Download the original ZSL workbook
+        run: node web/scripts/fetch-zsl-template.mjs
+      - name: Verify original workbook
+        run: node web/scripts/verify-bundled-template.mjs
+      - name: Build current web application (not old Expo prototype)
+        working-directory: web
+        run: npm run build
+      - name: Prepare Capacitor iOS wrapper
+        working-directory: web
+        run: |
+          npm install --no-save --no-audit --no-fund @capacitor/core@7 @capacitor/cli@7 @capacitor/ios@7
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "sk.zsl.expenses",
+            "appName": "ZSL Expenses",
+            "webDir": "dist",
+            "server": { "iosScheme": "capacitor" }
+          }
+          EOF
+          npx cap add ios
+          npx cap sync ios
+      - name: Build unsigned physical iPhone application
+        working-directory: web
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ios-build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+          test -d ios-build/Build/Products/Release-iphoneos/App.app
+      - name: Package .app and GitHub source code
+        run: |
+          mkdir -p output
+          ditto -c -k --keepParent web/ios-build/Build/Products/Release-iphoneos/App.app output/ZSL-Expenses-unsigned-app.zip
+          git archive --format=zip HEAD > output/ZSL-Expenses-full-source.zip
+          cat > output/README-INSTALLATION.txt <<'EOF'
+          ZSL Expenses - UNSIGNED iOS .app
+          --------------------------------
+          The .app was built from the current web/ PWA, NOT the old Expo prototype.
+          It contains compiled web assets bundled into an iOS Capacitor app shell.
+          It is NOT signed and cannot be directly installed on normal iPhones.
+          Installing on a device requires a valid Apple provisioning/signing method.
+          For colleagues without Apple Developer membership use the hosted PWA:
+          https://thedubous.github.io/zsl-expenses/
+          
+          Test OCR, PDF, XLSX, file import/export and offline data before relying
+          on the iOS wrapper; browser APIs may differ in WKWebView.
+          The complete repository source is in ZSL-Expenses-full-source.zip.
+          EOF
+      - name: Upload downloadable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZSL-Expenses-iOS-unsigned-and-source
+          path: output/*
+          if-no-files-found: error
+          retention-days: 14
